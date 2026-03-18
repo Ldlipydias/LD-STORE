@@ -3,7 +3,6 @@
   publish = "dist"
 
 [functions]
-  node_bundle = true
   directory = "netlify/functions"
 
 [[redirects]]
