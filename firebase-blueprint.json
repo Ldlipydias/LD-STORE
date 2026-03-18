@@ -1,0 +1,69 @@
+{
+  "entities": {
+    "Category": {
+      "title": "Category",
+      "description": "App category",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Category name" }
+      },
+      "required": ["name"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "App or digital product",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Product name" },
+        "description": { "type": "string", "description": "Product description" },
+        "price": { "type": "number", "description": "Product price" },
+        "imageUrl": { "type": "string", "description": "Product image URL (ImgBB)" },
+        "categoryId": { "type": "string", "description": "Category ID" },
+        "stripePriceId": { "type": "string", "description": "Stripe Price ID" },
+        "downloadUrl": { "type": "string", "description": "Download link after purchase" }
+      },
+      "required": ["name", "price", "imageUrl", "categoryId"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "description": "User email" },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "User role" }
+      },
+      "required": ["email", "role"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Purchase record",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "User ID" },
+        "productId": { "type": "string", "description": "Product ID" },
+        "status": { "type": "string", "enum": ["paid", "pending", "verifying", "rejected"], "description": "Order status" },
+        "paymentMethod": { "type": "string", "enum": ["stripe", "pix"], "description": "Payment method" },
+        "receiptUrl": { "type": "string", "description": "PIX receipt image URL" },
+        "stripeSessionId": { "type": "string", "description": "Stripe Session ID" }
+      },
+      "required": ["userId", "productId", "status"]
+    },
+    "Setting": {
+      "title": "Setting",
+      "description": "App settings",
+      "type": "object",
+      "properties": {
+        "pixKey": { "type": "string", "description": "PIX Key" },
+        "pixRecipient": { "type": "string", "description": "PIX Recipient Name" }
+      },
+      "required": ["pixKey", "pixRecipient"]
+    }
+  },
+  "firestore": {
+    "/categories/{categoryId}": { "schema": "Category", "description": "Categories collection" },
+    "/products/{productId}": { "schema": "Product", "description": "Products collection" },
+    "/users/{userId}": { "schema": "User", "description": "Users collection" },
+    "/orders/{orderId}": { "schema": "Order", "description": "Orders collection" },
+    "/settings/{settingId}": { "schema": "Setting", "description": "Settings collection" }
+  }
+}
