@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, setDoc, getDoc, onSnapshot, where, Timestamp } from 'firebase/firestore';
 import { uploadToImgBB } from '../services/imgbb';
-import { Plus, Trash2, Image as ImageIcon, Loader2, Lock, Edit2, X, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, Loader2, Lock, Edit2, X, Sparkles, Check, XCircle, ExternalLink, Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Admin() {
@@ -13,6 +13,8 @@ export default function Admin() {
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pixSettings, setPixSettings] = useState({ pixKey: '', pixRecipient: '' });
+  const [pendingOrders, setPendingOrders] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   // Form states
   const [newCategory, setNewCategory] = useState('');
@@ -30,6 +32,42 @@ export default function Admin() {
     if (isAuthorized) {
       fetchData();
       fetchPixSettings();
+
+      // Listen for pending PIX orders
+      const q = query(
+        collection(db, 'orders'),
+        where('status', '==', 'pending'),
+        where('paymentMethod', '==', 'pix'),
+        orderBy('createdAt', 'desc')
+      );
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Check for new orders to show notification
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added') {
+            const newOrder = { id: change.doc.id, ...change.doc.data() } as any;
+            // Only notify if it's not the initial load (approximate check)
+            const orderTime = new Date(newOrder.createdAt).getTime();
+            if (Date.now() - orderTime < 10000) {
+              setNotifications(prev => {
+                // Prevent duplicate notifications
+                if (prev.some(n => n.id === newOrder.id)) return prev;
+                return [...prev, newOrder];
+              });
+              // Auto remove notification after 10 seconds
+              setTimeout(() => {
+                setNotifications(prev => prev.filter(n => n.id !== newOrder.id));
+              }, 10000);
+            }
+          }
+        });
+
+        setPendingOrders(orders);
+      });
+
+      return () => unsubscribe();
     }
   }, [isAuthorized]);
 
@@ -159,11 +197,58 @@ export default function Admin() {
 
   const handleUpdateStock = async (id: string, newStock: number) => {
     try {
-      const { updateDoc, doc } = await import('firebase/firestore');
       await updateDoc(doc(db, 'products', id), { stock: newStock });
       fetchData();
     } catch (error) {
       console.error(error);
+    }
+  };
+
+  const handleApprovePix = async (order: any) => {
+    if (!confirm(`Liberar produto "${order.productName}" para ${order.userEmail}?`)) return;
+    setLoading(true);
+    try {
+      // 1. Update order status
+      await updateDoc(doc(db, 'orders', order.id), {
+        status: 'paid',
+        approvedAt: new Date().toISOString()
+      });
+
+      // 2. Decrease stock
+      const productDoc = await getDoc(doc(db, 'products', order.productId));
+      if (productDoc.exists()) {
+        const currentStock = productDoc.data().stock || 0;
+        await updateDoc(doc(db, 'products', order.productId), {
+          stock: Math.max(0, currentStock - 1)
+        });
+      }
+
+      alert('Produto liberado com sucesso!');
+      fetchData();
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao liberar produto.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRejectPix = async (order: any) => {
+    const reason = prompt('Motivo da rejeição (opcional):');
+    if (reason === null) return;
+
+    setLoading(true);
+    try {
+      await updateDoc(doc(db, 'orders', order.id), {
+        status: 'rejected',
+        rejectionReason: reason,
+        rejectedAt: new Date().toISOString()
+      });
+      alert('Pedido rejeitado.');
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -205,7 +290,42 @@ export default function Admin() {
   }
 
   return (
-    <div className="space-y-12 pb-20">
+    <div className="space-y-12 pb-20 relative">
+      {/* Floating Notifications */}
+      <div className="fixed bottom-8 right-8 z-50 space-y-4 pointer-events-none">
+        <AnimatePresence>
+          {notifications.map((n) => (
+            <motion.div
+              key={n.id}
+              initial={{ opacity: 0, x: 100, scale: 0.8 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 100, scale: 0.8 }}
+              className="pointer-events-auto w-80 p-4 rounded-2xl bg-emerald-600 border border-emerald-400 shadow-2xl flex items-start gap-4"
+            >
+              <div className="p-2 rounded-xl bg-white/20">
+                <Bell className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-emerald-100 uppercase tracking-widest">Novo Pagamento PIX</p>
+                <p className="text-sm font-bold text-white line-clamp-1">{n.userEmail}</p>
+                <p className="text-xs text-emerald-100 mt-1">Comprou: {n.productName}</p>
+                <button
+                  onClick={() => handleApprovePix(n)}
+                  className="mt-3 w-full py-2 rounded-lg bg-white text-emerald-600 text-xs font-black hover:bg-emerald-50 transition-colors"
+                >
+                  LIBERAR AGORA
+                </button>
+              </div>
+              <button 
+                onClick={() => setNotifications(prev => prev.filter(notif => notif.id !== n.id))}
+                className="text-white/50 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
       <div className="flex items-center justify-between">
         <h1 className="text-4xl font-black tracking-tighter">PAINEL ADM</h1>
         <div className="px-4 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold uppercase tracking-widest">
@@ -214,6 +334,90 @@ export default function Admin() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+        <div className="lg:col-span-3 space-y-6">
+          <h2 className="text-2xl font-black flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-amber-500/20">
+              <Sparkles className="w-6 h-6 text-amber-500" />
+            </div>
+            PEDIDOS PIX PENDENTES
+            {pendingOrders.length > 0 && (
+              <span className="px-2 py-1 rounded-md bg-amber-500 text-black text-[10px] font-black">
+                {pendingOrders.length}
+              </span>
+            )}
+          </h2>
+
+          {pendingOrders.length === 0 ? (
+            <div className="p-12 rounded-3xl border-2 border-dashed border-white/5 text-center space-y-4">
+              <p className="text-gray-500 font-medium">Nenhum pedido aguardando aprovação no momento.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {pendingOrders.map((order) => (
+                <motion.div
+                  key={order.id}
+                  layout
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-6 rounded-3xl bg-white/5 border border-white/10 space-y-6 hover:border-amber-500/30 transition-colors"
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Produto</p>
+                      <h3 className="font-bold text-lg leading-tight">{order.productName}</h3>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Valor</p>
+                      <p className="text-emerald-400 font-black">R$ {order.amount.toFixed(2)}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Cliente</p>
+                    <p className="text-sm text-gray-300 font-medium break-all">{order.userEmail}</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Comprovante</p>
+                    <a 
+                      href={order.receiptUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="block relative group aspect-video rounded-2xl overflow-hidden border border-white/10 bg-black"
+                    >
+                      <img 
+                        src={order.receiptUrl} 
+                        alt="Comprovante" 
+                        className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
+                        <ExternalLink className="w-6 h-6 text-white" />
+                      </div>
+                    </a>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 pt-2">
+                    <button
+                      onClick={() => handleRejectPix(order)}
+                      className="flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 text-red-500 font-bold text-sm hover:bg-red-500 hover:text-white transition-all"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      REJEITAR
+                    </button>
+                    <button
+                      onClick={() => handleApprovePix(order)}
+                      className="flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500 text-black font-black text-sm hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20"
+                    >
+                      <Check className="w-4 h-4" />
+                      LIBERAR
+                    </button>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* PIX Settings Section */}
         <div className="space-y-6">
           <h2 className="text-xl font-bold flex items-center gap-2">

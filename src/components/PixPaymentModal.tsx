@@ -1,27 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { doc, getDoc, setDoc, updateDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc } from 'firebase/firestore';
 import { uploadToImgBB } from '../services/imgbb';
-import { verifyPixReceipt } from '../services/gemini';
-import { X, Copy, Check, Upload, Loader2, AlertCircle, Sparkles, ShieldCheck } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { X, Copy, Check, Upload, AlertCircle, Sparkles, ShieldCheck, MessageCircle } from 'lucide-react';
+import { motion } from 'motion/react';
 
 interface PixPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   product: any;
   userId: string;
+  userEmail?: string | null;
   onSuccess: () => void;
 }
 
-export default function PixPaymentModal({ isOpen, onClose, product, userId, onSuccess }: PixPaymentModalProps) {
+export default function PixPaymentModal({ isOpen, onClose, product, userId, userEmail, onSuccess }: PixPaymentModalProps) {
   const [pixSettings, setPixSettings] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [verifying, setVerifying] = useState(false);
   const [receipt, setReceipt] = useState<File | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [step, setStep] = useState<'payment' | 'upload' | 'verifying' | 'success'>('payment');
+  const [step, setStep] = useState<'payment' | 'upload' | 'success'>('payment');
 
   useEffect(() => {
     if (isOpen) {
@@ -59,70 +58,44 @@ export default function PixPaymentModal({ isOpen, onClose, product, userId, onSu
     }
   };
 
-  const handleVerify = async () => {
+  const handleSubmit = async () => {
     if (!receipt) {
       setError('Por favor, selecione o comprovante.');
       return;
     }
 
-    setVerifying(true);
+    setLoading(true);
     setError(null);
-    setStep('verifying');
 
     try {
-      // 1. Convert image to base64 for Gemini
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(receipt);
+      // 1. Upload to ImgBB
+      const receiptUrl = await uploadToImgBB(receipt);
+
+      // 2. Create Order in Firestore as PENDING
+      await addDoc(collection(db, 'orders'), {
+        userId,
+        userEmail: userEmail || 'E-mail não informado',
+        productId: product.id,
+        productName: product.name,
+        amount: product.price,
+        status: 'pending',
+        paymentMethod: 'pix',
+        receiptUrl,
+        createdAt: new Date().toISOString(),
       });
-      const base64Image = await base64Promise;
 
-      // 2. Verify with Gemini
-      const result = await verifyPixReceipt(base64Image, product.price, pixSettings.pixRecipient);
-
-      if (result.isValid) {
-        // 3. Upload to ImgBB for record
-        const receiptUrl = await uploadToImgBB(receipt);
-
-        // 4. Create Order in Firestore
-        await addDoc(collection(db, 'orders'), {
-          userId,
-          productId: product.id,
-          status: 'paid',
-          paymentMethod: 'pix',
-          receiptUrl,
-          verifiedAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          aiMetadata: result
-        });
-
-        // 5. Decrement stock
-        const productRef = doc(db, 'products', product.id);
-        const productSnap = await getDoc(productRef);
-        if (productSnap.exists()) {
-          const currentStock = productSnap.data().stock || 0;
-          if (currentStock > 0) {
-            await updateDoc(productRef, { stock: currentStock - 1 });
-          }
-        }
-
-        setStep('success');
-        setTimeout(() => {
-          onSuccess();
-          onClose();
-        }, 3000);
-      } else {
-        setError(`Comprovante Inválido: ${result.reason || 'Dados não conferem.'}`);
-        setStep('upload');
-      }
+      setStep('success');
     } catch (err: any) {
       console.error(err);
-      setError('Erro ao processar o comprovante. Tente novamente.');
-      setStep('upload');
+      setError('Erro ao enviar o comprovante. Tente novamente.');
     } finally {
-      setVerifying(false);
+      setLoading(false);
     }
+  };
+
+  const openWhatsApp = () => {
+    const message = encodeURIComponent(`Olá, acabei de enviar o comprovante do produto ${product.name}. Meu e-mail é ${userEmail}. Poderia liberar meu acesso?`);
+    window.open(`https://wa.me/5574991964675?text=${message}`, '_blank');
   };
 
   if (!isOpen) return null;
@@ -208,7 +181,7 @@ export default function PixPaymentModal({ isOpen, onClose, product, userId, onSu
             <div className="space-y-8">
               <div className="text-center space-y-2">
                 <h2 className="text-3xl font-black tracking-tighter">ENVIAR COMPROVANTE</h2>
-                <p className="text-gray-400 text-sm">Nossa IA vai validar seu pagamento em segundos.</p>
+                <p className="text-gray-400 text-sm">Envie o comprovante para liberação manual.</p>
               </div>
 
               <div className="space-y-4">
@@ -252,32 +225,13 @@ export default function PixPaymentModal({ isOpen, onClose, product, userId, onSu
                   VOLTAR
                 </button>
                 <button
-                  onClick={handleVerify}
-                  disabled={!receipt || verifying}
-                  className="py-5 rounded-2xl bg-purple-600 text-white font-black text-sm hover:bg-purple-500 transition-all shadow-xl shadow-purple-500/20 disabled:opacity-50 active:scale-95"
+                  onClick={handleSubmit}
+                  disabled={!receipt || loading}
+                  className="py-5 rounded-2xl bg-purple-600 text-white font-black text-sm hover:bg-purple-500 transition-all shadow-xl shadow-purple-500/20 disabled:opacity-50 active:scale-95 flex items-center justify-center gap-2"
                 >
-                  VERIFICAR AGORA
+                  {loading ? <span className="animate-spin">⌛</span> : <Upload className="w-4 h-4" />}
+                  ENVIAR AGORA
                 </button>
-              </div>
-            </div>
-          )}
-
-          {step === 'verifying' && (
-            <div className="py-12 text-center space-y-8">
-              <div className="relative inline-block">
-                <div className="w-24 h-24 rounded-full border-4 border-purple-500/20 border-t-purple-500 animate-spin" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <Sparkles className="w-8 h-8 text-purple-400 animate-pulse" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <h2 className="text-2xl font-black tracking-tighter">VALIDANDO PAGAMENTO</h2>
-                <p className="text-gray-400 text-sm animate-pulse">Nossa IA está lendo seu comprovante...</p>
-              </div>
-              <div className="max-w-xs mx-auto p-4 rounded-2xl bg-white/5 border border-white/10">
-                <p className="text-[10px] text-gray-500 uppercase tracking-widest leading-relaxed">
-                  Estamos conferindo o valor de <strong>R$ {product.price.toFixed(2)}</strong> e o destinatário <strong>{pixSettings?.pixRecipient}</strong>.
-                </p>
               </div>
             </div>
           )}
@@ -287,15 +241,35 @@ export default function PixPaymentModal({ isOpen, onClose, product, userId, onSu
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
-                className="w-24 h-24 rounded-full bg-emerald-500 flex items-center justify-center mx-auto shadow-2xl shadow-emerald-500/40"
+                className="w-24 h-24 rounded-full bg-amber-500 flex items-center justify-center mx-auto shadow-2xl shadow-amber-500/40"
               >
                 <Check className="w-12 h-12 text-white" />
               </motion.div>
               <div className="space-y-2">
-                <h2 className="text-3xl font-black tracking-tighter text-emerald-400">PAGAMENTO APROVADO!</h2>
-                <p className="text-gray-400 text-sm">Sua compra foi liberada instantaneamente.</p>
+                <h2 className="text-3xl font-black tracking-tighter text-amber-400">AGUARDE LIBERAÇÃO</h2>
+                <p className="text-gray-400 text-sm">Seu comprovante foi enviado com sucesso!</p>
               </div>
-              <p className="text-xs text-gray-500">Redirecionando você para o conteúdo...</p>
+              
+              <div className="space-y-4">
+                <p className="text-xs text-gray-500">
+                  O administrador irá conferir seu pagamento e liberar o produto em breve.
+                </p>
+                
+                <button
+                  onClick={openWhatsApp}
+                  className="w-full py-4 rounded-2xl bg-[#25D366] text-white font-black text-sm hover:opacity-90 transition-all flex items-center justify-center gap-3 shadow-xl shadow-green-500/20"
+                >
+                  <MessageCircle className="w-5 h-5" />
+                  CHAMAR NO WHATSAPP
+                </button>
+
+                <button
+                  onClick={onClose}
+                  className="w-full py-4 rounded-2xl bg-white/5 text-gray-400 font-bold text-xs hover:bg-white/10 transition-all"
+                >
+                  FECHAR E VOLTAR À LOJA
+                </button>
+              </div>
             </div>
           )}
         </div>

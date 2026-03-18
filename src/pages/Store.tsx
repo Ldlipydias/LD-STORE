@@ -301,6 +301,7 @@ export default function Store({ user }: StoreProps) {
           onClose={() => setPixProduct(null)}
           product={pixProduct}
           userId={user.uid}
+          userEmail={user.email}
           onSuccess={() => {
             fetchData();
             setPixProduct(null);

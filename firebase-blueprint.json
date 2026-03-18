@@ -40,11 +40,17 @@
       "type": "object",
       "properties": {
         "userId": { "type": "string", "description": "User ID" },
+        "userEmail": { "type": "string", "description": "User email" },
         "productId": { "type": "string", "description": "Product ID" },
-        "status": { "type": "string", "enum": ["paid", "pending", "verifying", "rejected"], "description": "Order status" },
+        "productName": { "type": "string", "description": "Product name" },
+        "amount": { "type": "number", "description": "Order amount" },
+        "status": { "type": "string", "enum": ["paid", "pending", "rejected"], "description": "Order status" },
         "paymentMethod": { "type": "string", "enum": ["stripe", "pix"], "description": "Payment method" },
         "receiptUrl": { "type": "string", "description": "PIX receipt image URL" },
-        "stripeSessionId": { "type": "string", "description": "Stripe Session ID" }
+        "stripeSessionId": { "type": "string", "description": "Stripe Session ID" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "approvedAt": { "type": "string", "format": "date-time" },
+        "rejectionReason": { "type": "string" }
       },
       "required": ["userId", "productId", "status"]
     },

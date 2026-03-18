@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { User } from 'firebase/auth';
 import { loginWithGoogle } from '../firebase';
 import { useNavigate } from 'react-router-dom';
@@ -12,17 +13,34 @@ interface HomeProps {
 export default function Home({ user, isAdmin }: HomeProps) {
   const navigate = useNavigate();
 
+  const [error, setError] = useState<string | null>(null);
+
   const handleLogin = async () => {
     try {
+      setError(null);
       await loginWithGoogle();
       navigate('/store');
-    } catch (error) {
-      console.error('Login error:', error);
+    } catch (err: any) {
+      console.error('Login error:', err);
+      if (err.code === 'auth/unauthorized-domain') {
+        setError('Este domínio não está autorizado no Firebase. Adicione a URL do Netlify nos "Domínios Autorizados" do Firebase Console.');
+      } else {
+        setError('Erro ao fazer login: ' + (err.message || 'Erro desconhecido'));
+      }
     }
   };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] text-center space-y-12">
+      {error && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed top-24 left-1/2 -translate-x-1/2 z-50 p-4 rounded-2xl bg-red-500/20 border border-red-500/50 text-red-200 text-sm max-w-md backdrop-blur-xl"
+        >
+          {error}
+        </motion.div>
+      )}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
