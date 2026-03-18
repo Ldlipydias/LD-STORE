@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import path from 'path';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from "@google/genai";
+import serverless from 'serverless-http';
 
 dotenv.config();
 
@@ -175,5 +176,8 @@ if (process.env.NODE_ENV !== 'production' || !process.env.NETLIFY) {
   });
 }
 
+const handler = serverless(app);
+
+export { handler };
 export default app;
 export { startServer };
