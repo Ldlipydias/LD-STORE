@@ -11,7 +11,10 @@ const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || ''
 const stripePromise = STRIPE_PUBLISHABLE_KEY ? loadStripe(STRIPE_PUBLISHABLE_KEY) : null;
 
 // Debug log to help identify if the key is being loaded correctly in Netlify
-console.log('Stripe Key Status:', STRIPE_PUBLISHABLE_KEY ? 'Loaded (starts with ' + STRIPE_PUBLISHABLE_KEY.substring(0, 7) + '...)' : 'Not Loaded');
+console.log('--- Stripe Debug Info ---');
+console.log('VITE_STRIPE_PUBLISHABLE_KEY:', STRIPE_PUBLISHABLE_KEY ? 'Loaded (starts with ' + STRIPE_PUBLISHABLE_KEY.substring(0, 7) + '...)' : 'MISSING');
+console.log('import.meta.env keys:', Object.keys(import.meta.env).filter(k => k.startsWith('VITE_')));
+console.log('-------------------------');
 
 interface StoreProps {
   user: User;
@@ -53,6 +56,10 @@ export default function Store({ user }: StoreProps) {
       setLoading(false);
     }
   };
+
+  const filteredProducts = selectedCategory
+    ? products.filter(p => p.categoryId === selectedCategory)
+    : products;
 
   const handleBuy = async (product: any) => {
     if (!STRIPE_PUBLISHABLE_KEY) {
@@ -106,10 +113,6 @@ export default function Store({ user }: StoreProps) {
       setBuyingId(null);
     }
   };
-
-  const filteredProducts = selectedCategory
-    ? products.filter(p => p.categoryId === selectedCategory)
-    : products;
 
   if (loading) {
     return (

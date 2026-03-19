@@ -7,9 +7,7 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-02-24-preview' as any,
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
 
 app.post('/api/create-checkout-session', async (req, res) => {
   try {
