@@ -10,6 +10,9 @@ import PixPaymentModal from '../components/PixPaymentModal';
 const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
 const stripePromise = STRIPE_PUBLISHABLE_KEY ? loadStripe(STRIPE_PUBLISHABLE_KEY) : null;
 
+// Debug log to help identify if the key is being loaded correctly in Netlify
+console.log('Stripe Key Status:', STRIPE_PUBLISHABLE_KEY ? 'Loaded (starts with ' + STRIPE_PUBLISHABLE_KEY.substring(0, 7) + '...)' : 'Not Loaded');
+
 interface StoreProps {
   user: User;
 }
