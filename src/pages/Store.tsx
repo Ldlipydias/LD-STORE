@@ -51,11 +51,14 @@ export default function Store({ user }: StoreProps) {
   };
 
   const handleBuy = async (product: any) => {
-    const stripe = await stripePromise;
-    if (!stripe) {
-      alert('Erro: Chave pública do Stripe não configurada ou inválida. Verifique VITE_STRIPE_PUBLISHABLE_KEY nas configurações.');
+    const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+    if (!stripeKey || stripeKey === 'pk_test_...') {
+      alert('Erro: Chave pública do Stripe não configurada. Adicione VITE_STRIPE_PUBLISHABLE_KEY nos Secrets do AI Studio.');
+      setBuyingId(null);
       return;
     }
+
+    const stripe = await stripePromise;
 
     try {
       setError(null);
