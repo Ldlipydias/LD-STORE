@@ -5,7 +5,19 @@ import { GoogleGenAI, Type } from "@google/genai";
 
 dotenv.config();
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+let stripeClient: Stripe | null = null;
+
+function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key || key === 'sk_test_...') {
+    throw new Error('STRIPE_SECRET_KEY is not configured or is using a placeholder.');
+  }
+  if (!stripeClient) {
+    stripeClient = new Stripe(key);
+  }
+  return stripeClient;
+}
+
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 const app = express();
@@ -15,17 +27,25 @@ app.use(express.json());
 app.post('/api/create-checkout-session', async (req, res) => {
   const { productId, productName, productPrice, userId, origin } = req.body;
 
-  if (!process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_...') {
-    console.error('STRIPE_SECRET_KEY is not configured or is using a placeholder.');
-    return res.status(500).json({ 
-      error: 'Configuração Incompleta: A chave secreta do Stripe (STRIPE_SECRET_KEY) não foi configurada no servidor. Adicione-a nos Secrets do AI Studio.' 
-    });
-  }
-  
-  console.log('Stripe Secret Key detected:', process.env.STRIPE_SECRET_KEY.substring(0, 7) + '...');
-
   try {
-    const baseUrl = origin || process.env.APP_URL || req.headers.origin;
+    const stripe = getStripe();
+    console.log('Stripe Secret Key detected:', process.env.STRIPE_SECRET_KEY?.substring(0, 7) + '...');
+    
+    // Better base URL detection for Netlify and local dev
+    let baseUrl = origin;
+    if (!baseUrl) {
+      if (process.env.URL) { // Netlify default env var
+        baseUrl = process.env.URL;
+      } else if (process.env.APP_URL) {
+        baseUrl = process.env.APP_URL;
+      } else {
+        baseUrl = req.headers.origin || 'http://localhost:3000';
+      }
+    }
+    
+    // Ensure no trailing slash for consistency
+    baseUrl = baseUrl.replace(/\/$/, '');
+    
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
@@ -63,6 +83,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
 // Verify Stripe Session
 app.get('/api/verify-session/:sessionId', async (req, res) => {
   try {
+    const stripe = getStripe();
     const session = await stripe.checkout.sessions.retrieve(req.params.sessionId);
     res.json({ status: session.payment_status });
   } catch (error: any) {
