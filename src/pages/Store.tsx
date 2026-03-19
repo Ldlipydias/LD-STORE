@@ -7,7 +7,8 @@ import { ShoppingCart, Download, ExternalLink, Sparkles, Filter, Loader2, Copy, 
 import { motion, AnimatePresence } from 'motion/react';
 import PixPaymentModal from '../components/PixPaymentModal';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
+const stripePromise = STRIPE_PUBLISHABLE_KEY ? loadStripe(STRIPE_PUBLISHABLE_KEY) : null;
 
 interface StoreProps {
   user: User;
@@ -51,10 +52,13 @@ export default function Store({ user }: StoreProps) {
   };
 
   const handleBuy = async (product: any) => {
-    const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
-    if (!stripeKey || stripeKey === 'pk_test_...') {
-      alert('Erro: Chave pública do Stripe não configurada. Adicione VITE_STRIPE_PUBLISHABLE_KEY nos Secrets do AI Studio.');
-      setBuyingId(null);
+    if (!STRIPE_PUBLISHABLE_KEY) {
+      alert('Erro: Chave pública do Stripe não configurada. \n\nSe você está no Netlify: Adicione VITE_STRIPE_PUBLISHABLE_KEY nas "Environment Variables" do painel do Netlify e faça um novo Deploy.\n\nSe você está no AI Studio: Adicione nos Secrets.');
+      return;
+    }
+
+    if (!stripePromise) {
+      alert('Erro ao inicializar Stripe. Verifique sua chave pública.');
       return;
     }
 

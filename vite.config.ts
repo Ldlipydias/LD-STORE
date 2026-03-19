@@ -9,7 +9,19 @@ export default defineConfig(({mode}) => {
     plugins: [react(), tailwindcss()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY || env.GEMINI_API_KEY),
-      'import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY': JSON.stringify(process.env.VITE_STRIPE_PUBLISHABLE_KEY || env.VITE_STRIPE_PUBLISHABLE_KEY),
+      // Expose all VITE_ environment variables to the client
+      ...Object.keys(process.env).reduce((acc, key) => {
+        if (key.startsWith('VITE_')) {
+          acc[`import.meta.env.${key}`] = JSON.stringify(process.env[key]);
+        }
+        return acc;
+      }, {} as Record<string, string>),
+      ...Object.keys(env).reduce((acc, key) => {
+        if (key.startsWith('VITE_')) {
+          acc[`import.meta.env.${key}`] = JSON.stringify(env[key]);
+        }
+        return acc;
+      }, {} as Record<string, string>),
     },
     resolve: {
       alias: {
