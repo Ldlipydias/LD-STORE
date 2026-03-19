@@ -16,11 +16,13 @@ app.post('/api/create-checkout-session', async (req, res) => {
   const { productId, productName, productPrice, userId, origin } = req.body;
 
   if (!process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_...') {
-    console.error('STRIPE_SECRET_KEY is not configured.');
+    console.error('STRIPE_SECRET_KEY is not configured or is using a placeholder.');
     return res.status(500).json({ 
       error: 'Configuração Incompleta: A chave secreta do Stripe (STRIPE_SECRET_KEY) não foi configurada no servidor. Adicione-a nos Secrets do AI Studio.' 
     });
   }
+  
+  console.log('Stripe Secret Key detected:', process.env.STRIPE_SECRET_KEY.substring(0, 7) + '...');
 
   try {
     const baseUrl = origin || process.env.APP_URL || req.headers.origin;
