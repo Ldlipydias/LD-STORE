@@ -3,7 +3,7 @@ import { db } from '../firebase';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { loadStripe } from '@stripe/stripe-js';
-import { ShoppingCart, Download, ExternalLink, Sparkles, Filter, Loader2, Copy, Check, QrCode } from 'lucide-react';
+import { ShoppingCart, Download, ExternalLink, Sparkles, Filter, Loader2, Copy, Check, QrCode, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import PixPaymentModal from '../components/PixPaymentModal';
 
@@ -24,6 +24,7 @@ export default function Store({ user }: StoreProps) {
   const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [userOrders, setUserOrders] = useState<string[]>([]);
+  const [userPendingOrders, setUserPendingOrders] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [buyingId, setBuyingId] = useState<string | null>(null);
@@ -46,10 +47,14 @@ export default function Store({ user }: StoreProps) {
 
       const orders = await getDocs(query(
         collection(db, 'orders'),
-        where('userId', '==', user.uid),
-        where('status', '==', 'paid')
+        where('userId', '==', user.uid)
       ));
-      setUserOrders(orders.docs.map(d => d.data().productId));
+      
+      const paid = orders.docs.filter(d => d.data().status === 'paid').map(d => d.data().productId);
+      const pending = orders.docs.filter(d => d.data().status === 'pending').map(d => d.data().productId);
+      
+      setUserOrders(paid);
+      setUserPendingOrders(pending);
     } catch (error) {
       console.error(error);
     } finally {
@@ -186,6 +191,7 @@ export default function Store({ user }: StoreProps) {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                 {catProducts.map((prod) => {
                   const isPurchased = userOrders.includes(prod.id);
+                  const isPending = userPendingOrders.includes(prod.id);
                   const isOutOfStock = (prod.stock || 0) <= 0;
                   
                   return (
@@ -208,7 +214,14 @@ export default function Store({ user }: StoreProps) {
                           </div>
                         )}
 
-                        {isOutOfStock && !isPurchased && (
+                        {isPending && !isPurchased && (
+                          <div className="absolute top-2 right-2 px-3 py-1 rounded-full bg-amber-500 text-black text-[10px] font-black uppercase tracking-widest shadow-lg z-10 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            EM ANÁLISE
+                          </div>
+                        )}
+
+                        {isOutOfStock && !isPurchased && !isPending && (
                           <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10">
                             <span className="px-3 py-1 rounded-full bg-red-500 text-white text-[10px] font-black uppercase tracking-widest">
                               ESGOTADO
@@ -258,6 +271,10 @@ export default function Store({ user }: StoreProps) {
                             >
                               {copiedId === prod.id ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                             </button>
+                          </div>
+                        ) : isPending ? (
+                          <div className="py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold text-center">
+                            Aguardando Liberação
                           </div>
                         ) : (
                           <div className="space-y-2">

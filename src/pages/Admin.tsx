@@ -168,8 +168,9 @@ export default function Admin() {
       }
       setProductForm({ name: '', description: '', price: '', categoryId: '', downloadUrl: '', stock: '10', image: null });
       fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      alert('Erro ao salvar produto: ' + (error.message || 'Verifique sua chave do ImgBB ou conexão.'));
     } finally {
       setLoading(false);
     }
@@ -368,7 +369,7 @@ export default function Admin() {
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Valor</p>
-                      <p className="text-emerald-400 font-black">R$ {order.amount.toFixed(2)}</p>
+                      <p className="text-emerald-400 font-black">R$ {(order.price || order.amount || 0).toFixed(2)}</p>
                     </div>
                   </div>
 
@@ -426,7 +427,7 @@ export default function Admin() {
           </h2>
           <form onSubmit={handleUpdatePixSettings} className="space-y-4 p-6 rounded-3xl bg-white/5 border border-white/10">
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Chave PIX (Copia e Cola)</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Chave PIX (E-mail, CPF, Telefone ou Aleatória)</label>
               <input
                 type="text"
                 value={pixSettings.pixKey}
