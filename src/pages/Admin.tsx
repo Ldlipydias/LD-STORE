@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, setDoc, getDoc, onSnapshot, where, Timestamp } from 'firebase/firestore';
 import { uploadToImgBB } from '../services/imgbb';
-import { Plus, Trash2, Image as ImageIcon, Loader2, Lock, Edit2, X, Sparkles, Check, XCircle, ExternalLink, Bell, MessageSquare, Users, Send } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, Loader2, Lock, Edit2, X, Sparkles, Check, XCircle, ExternalLink, Bell, MessageSquare, Users, Send, ShoppingBag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Admin() {
@@ -20,6 +20,7 @@ export default function Admin() {
   const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
   const [adminReply, setAdminReply] = useState('');
   const [replying, setReplying] = useState(false);
+  const [activeTab, setActiveTab] = useState<'orders' | 'support' | 'products' | 'settings'>('orders');
 
   useEffect(() => {
     if (selectedTicket) {
@@ -480,19 +481,49 @@ export default function Admin() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-        <div className="lg:col-span-3 space-y-6">
-          <h2 className="text-2xl font-black flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-amber-500/20">
-              <Sparkles className="w-6 h-6 text-amber-500" />
-            </div>
-            PEDIDOS PIX PENDENTES
-            {pendingOrders.length > 0 && (
-              <span className="px-2 py-1 rounded-md bg-amber-500 text-black text-[10px] font-black">
-                {pendingOrders.length}
+      {/* Admin Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar border-b border-white/10">
+        {[
+          { id: 'orders', label: 'Pedidos PIX', icon: Bell, count: pendingOrders.length },
+          { id: 'support', label: 'Suporte', icon: MessageSquare, count: supportTickets.filter(t => t.status === 'open').length },
+          { id: 'products', label: 'Produtos', icon: ShoppingBag, count: products.length },
+          { id: 'settings', label: 'Configurações', icon: Sparkles, count: 0 },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`flex items-center gap-2 px-6 py-3 rounded-t-2xl font-bold text-sm transition-all whitespace-nowrap relative ${
+              activeTab === tab.id 
+                ? 'bg-white/10 text-white' 
+                : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+            }`}
+          >
+            <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-amber-500' : ''}`} />
+            {tab.label}
+            {tab.count > 0 && (
+              <span className="px-1.5 py-0.5 rounded-md bg-amber-500 text-black text-[10px] font-black">
+                {tab.count}
               </span>
             )}
-          </h2>
+            {activeTab === tab.id && (
+              <motion.div 
+                layoutId="activeTab"
+                className="absolute bottom-0 left-0 right-0 h-1 bg-amber-500"
+              />
+            )}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 gap-12">
+        {activeTab === 'orders' && (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-black flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-amber-500/20">
+                <Sparkles className="w-6 h-6 text-amber-500" />
+              </div>
+              PEDIDOS PIX PENDENTES
+            </h2>
 
           {pendingOrders.length === 0 ? (
             <div className="p-12 rounded-3xl border-2 border-dashed border-white/5 text-center space-y-4">
@@ -564,10 +595,12 @@ export default function Admin() {
             </div>
           )}
         </div>
+      )}
 
         {/* Support Tickets Section */}
-        <div id="support-section" className="lg:col-span-3 space-y-6">
-          <div className="flex items-center justify-between">
+        {activeTab === 'support' && (
+          <div id="support-section" className="space-y-6">
+            <div className="flex items-center justify-between">
             <h2 className="text-2xl font-black flex items-center gap-3">
               <div className="p-2 rounded-xl bg-blue-500/20">
                 <MessageSquare className="w-6 h-6 text-blue-500" />
@@ -726,13 +759,16 @@ export default function Admin() {
             </div>
           </div>
         </div>
+      )}
 
         {/* PIX Settings Section */}
-        <div className="space-y-6">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-emerald-400" />
-            Configurações PIX
-          </h2>
+        {activeTab === 'settings' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+            <div className="space-y-6">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-emerald-400" />
+                Configurações PIX
+              </h2>
           <form onSubmit={handleUpdatePixSettings} className="space-y-4 p-6 rounded-3xl bg-white/5 border border-white/10">
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Chave PIX (E-mail, CPF, Telefone ou Aleatória)</label>
@@ -762,8 +798,10 @@ export default function Admin() {
               {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Salvar Dados PIX'}
             </button>
           </form>
+        </div>
 
-          <h2 className="text-xl font-bold flex items-center gap-2 pt-6">
+        <div className="space-y-6">
+          <h2 className="text-xl font-bold flex items-center gap-2">
             <Plus className="w-5 h-5 text-purple-400" />
             Categorias
           </h2>
@@ -794,12 +832,16 @@ export default function Admin() {
                 </button>
               </div>
             ))}
+            </div>
           </div>
         </div>
+      )}
 
         {/* Products Section */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex items-center justify-between">
+        {activeTab === 'products' && (
+          <div className="space-y-12">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold flex items-center gap-2">
               {editingId ? <Edit2 className="w-5 h-5 text-amber-400" /> : <Plus className="w-5 h-5 text-pink-400" />}
               {editingId ? 'Editar Produto' : 'Novo Produto'}
@@ -938,6 +980,8 @@ export default function Admin() {
           </div>
         </div>
       </div>
-    </div>
+    )}
+  </div>
+</div>
   );
 }

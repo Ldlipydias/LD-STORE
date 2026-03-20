@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Send, Loader2, Upload, MessageSquare, Clock, Users, Image as ImageIcon } from 'lucide-react';
+import { X, Send, Loader2, Upload, MessageSquare, Clock, Users, Image as ImageIcon, Check } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, addDoc, doc, getDoc, updateDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, updateDoc, onSnapshot, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import { uploadToImgBB } from '../services/imgbb';
+import { sendSupportEmail } from '../services/api';
 
 interface SupportModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface SupportModalProps {
 
 export default function SupportModal({ isOpen, onClose, userId, userEmail }: SupportModalProps) {
   const [ticket, setTicket] = useState<any | null>(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState('');
@@ -27,11 +29,12 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
   useEffect(() => {
     if (!isOpen) return;
 
-    // Listen to user's open ticket
+    // Listen to user's most recent ticket
     const q = query(
       collection(db, 'support_tickets'),
       where('userId', '==', userId),
-      where('status', '==', 'open')
+      orderBy('updatedAt', 'desc'),
+      limit(1)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -39,8 +42,9 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
         const docData = snapshot.docs[0];
         const ticketData = { id: docData.id, ...docData.data() } as any;
         setTicket(ticketData);
+        setShowCreateForm(false);
         
-        // Mark as read by user
+        // Mark as read by user if it's not resolved or if there are unread messages
         if (ticketData.unreadByUser > 0) {
           updateDoc(doc(db, 'support_tickets', docData.id), {
             unreadByUser: 0
@@ -48,6 +52,7 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
         }
       } else {
         setTicket(null);
+        setShowCreateForm(true);
       }
       setLoading(false);
     });
@@ -85,7 +90,7 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
         imageUrl = await uploadToImgBB(attachment);
       }
 
-      await addDoc(collection(db, 'support_tickets'), {
+      const ticketRef = await addDoc(collection(db, 'support_tickets'), {
         userId,
         userEmail,
         orderId,
@@ -102,6 +107,24 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
           createdAt: new Date().toISOString()
         }]
       });
+
+      // Send email notification to admin
+      await sendSupportEmail(
+        'kakaxe188@gmail.com',
+        'Novo Chamado de Suporte - LD STORE',
+        `${userEmail || 'Um usuário'} abriu um novo chamado: ${message.substring(0, 100)}...`,
+        `
+          <div style="font-family: sans-serif; padding: 20px; color: #333;">
+            <h2 style="color: #6366f1;">Novo Chamado de Suporte</h2>
+            <p><strong>Usuário:</strong> ${userEmail || 'Não identificado'}</p>
+            <p><strong>ID do Pedido:</strong> ${orderId}</p>
+            <div style="background: #f3f4f6; padding: 15px; border-radius: 10px; margin: 20px 0;">
+              <p style="margin: 0; font-style: italic;">"${message}"</p>
+            </div>
+            <p>Acesse o painel administrativo para responder.</p>
+          </div>
+        `
+      );
 
       setMessage('');
       setAttachment(null);
@@ -140,6 +163,23 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
         unreadByAdmin: (ticket.unreadByAdmin || 0) + 1
       });
 
+      // Send email notification to admin
+      await sendSupportEmail(
+        'kakaxe188@gmail.com',
+        'Nova Mensagem de Suporte - LD STORE',
+        `${userEmail || 'Um usuário'} enviou uma mensagem: ${message.substring(0, 100)}...`,
+        `
+          <div style="font-family: sans-serif; padding: 20px; color: #333;">
+            <h2 style="color: #6366f1;">Nova Mensagem no Chamado</h2>
+            <p><strong>Usuário:</strong> ${userEmail || 'Não identificado'}</p>
+            <div style="background: #f3f4f6; padding: 15px; border-radius: 10px; margin: 20px 0;">
+              <p style="margin: 0; font-style: italic;">"${message}"</p>
+            </div>
+            <p>Acesse o painel administrativo para visualizar e responder.</p>
+          </div>
+        `
+      );
+
       setMessage('');
       setAttachment(null);
     } catch (error: any) {
@@ -174,7 +214,7 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
               <div className="flex-1 flex items-center justify-center">
                 <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
               </div>
-            ) : !ticket ? (
+            ) : showCreateForm ? (
               <div className="flex-1 overflow-y-auto p-6">
                 <div className="text-center space-y-4 mb-8">
                   <div className="w-16 h-16 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto">
@@ -184,6 +224,14 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
                   <p className="text-sm text-gray-400">
                     Abra um chamado informando o ID do seu pedido ou enviando o comprovante.
                   </p>
+                  {ticket && ticket.status === 'resolved' && (
+                    <button 
+                      onClick={() => setShowCreateForm(false)}
+                      className="text-[10px] text-purple-400 hover:underline font-bold uppercase tracking-widest"
+                    >
+                      Voltar para chamado resolvido
+                    </button>
+                  )}
                 </div>
 
                 <form onSubmit={handleCreateTicket} className="space-y-4">
@@ -241,20 +289,41 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
               </div>
             ) : (
               <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Queue Status Header */}
-                <div className="bg-purple-900/20 border-b border-purple-500/20 p-4 flex flex-col gap-2">
+                {/* Queue Status Header / Resolved Status */}
+                <div className={`${ticket.status === 'resolved' ? 'bg-emerald-900/20 border-emerald-500/20' : 'bg-purple-900/20 border-purple-500/20'} border-b p-4 flex flex-col gap-2`}>
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-purple-400">
-                      <Users className="w-4 h-4" />
-                      <span className="text-sm font-bold">Fila Virtual: {queueCount} pessoas</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-amber-400">
-                      <Clock className="w-4 h-4" />
-                      <span className="text-xs font-bold">30 min a 1h</span>
-                    </div>
+                    {ticket.status === 'resolved' ? (
+                      <div className="flex items-center gap-2 text-emerald-400">
+                        <Check className="w-4 h-4" />
+                        <span className="text-sm font-bold uppercase tracking-widest">Chamado Resolvido</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-purple-400">
+                        <Users className="w-4 h-4" />
+                        <span className="text-sm font-bold">Fila Virtual: {queueCount} pessoas</span>
+                      </div>
+                    )}
+                    
+                    {ticket.status !== 'resolved' && (
+                      <div className="flex items-center gap-1 text-amber-400">
+                        <Clock className="w-4 h-4" />
+                        <span className="text-xs font-bold">30 min a 1h</span>
+                      </div>
+                    )}
+
+                    {ticket.status === 'resolved' && (
+                      <button
+                        onClick={() => setShowCreateForm(true)}
+                        className="text-[10px] font-black bg-emerald-500 text-black px-2 py-1 rounded hover:bg-emerald-400 transition-colors uppercase"
+                      >
+                        Novo Suporte
+                      </button>
+                    )}
                   </div>
                   <p className="text-[10px] text-gray-400">
-                    Aguarde, um administrador irá responder em breve. A fila é atualizada em tempo real.
+                    {ticket.status === 'resolved' 
+                      ? 'Este atendimento foi encerrado. Se precisar de mais ajuda, abra um novo chamado.'
+                      : 'Aguarde, um administrador irá responder em breve. A fila é atualizada em tempo real.'}
                   </p>
                 </div>
 
@@ -290,49 +359,60 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
                 </div>
 
                 {/* Chat Input */}
-                <form onSubmit={handleSendMessage} className="p-4 border-t border-white/10 bg-zinc-900 flex gap-2 items-end">
-                  <label className="p-3 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer transition-colors text-gray-400 hover:text-white">
-                    <ImageIcon className="w-5 h-5" />
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setAttachment(e.target.files?.[0] || null)}
-                      className="hidden"
-                    />
-                  </label>
-                  
-                  <div className="flex-1 relative">
-                    {attachment && (
-                      <div className="absolute -top-10 left-0 bg-purple-600 text-white text-[10px] px-2 py-1 rounded-md flex items-center gap-1">
-                        <ImageIcon className="w-3 h-3" />
-                        Anexo pronto
-                        <button type="button" onClick={() => setAttachment(null)} className="ml-1 hover:text-red-300">
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    )}
-                    <textarea
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
-                      placeholder="Digite sua mensagem..."
-                      className="w-full px-4 py-3 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none text-sm resize-none h-[48px] min-h-[48px] max-h-32"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSendMessage(e);
-                        }
-                      }}
-                    />
-                  </div>
+                {ticket.status === 'open' ? (
+                  <form onSubmit={handleSendMessage} className="p-4 border-t border-white/10 bg-zinc-900 flex gap-2 items-end">
+                    <label className="p-3 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer transition-colors text-gray-400 hover:text-white">
+                      <ImageIcon className="w-5 h-5" />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setAttachment(e.target.files?.[0] || null)}
+                        className="hidden"
+                      />
+                    </label>
+                    
+                    <div className="flex-1 relative">
+                      {attachment && (
+                        <div className="absolute -top-10 left-0 bg-purple-600 text-white text-[10px] px-2 py-1 rounded-md flex items-center gap-1">
+                          <ImageIcon className="w-3 h-3" />
+                          Anexo pronto
+                          <button type="button" onClick={() => setAttachment(null)} className="ml-1 hover:text-red-300">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                      <textarea
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        placeholder="Digite sua mensagem..."
+                        className="w-full px-4 py-3 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none text-sm resize-none h-[48px] min-h-[48px] max-h-32"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendMessage(e);
+                          }
+                        }}
+                      />
+                    </div>
 
-                  <button
-                    type="submit"
-                    disabled={sending || (!message.trim() && !attachment)}
-                    className="p-3 rounded-xl bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50 transition-colors"
-                  >
-                    {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                  </button>
-                </form>
+                    <button
+                      type="submit"
+                      disabled={sending || (!message.trim() && !attachment)}
+                      className="p-3 rounded-xl bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50 transition-colors"
+                    >
+                      {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                    </button>
+                  </form>
+                ) : (
+                  <div className="p-6 border-t border-white/10 bg-zinc-900 text-center">
+                    <button
+                      onClick={() => setShowCreateForm(true)}
+                      className="w-full py-3 rounded-xl bg-purple-600 text-white font-bold hover:bg-purple-500 transition-all"
+                    >
+                      ABRIR NOVO CHAMADO
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </motion.div>

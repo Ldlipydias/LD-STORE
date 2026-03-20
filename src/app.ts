@@ -1,11 +1,48 @@
 import express from 'express';
 import Stripe from 'stripe';
 import dotenv from 'dotenv';
+import nodemailer from 'nodemailer';
 
 dotenv.config();
 
 const app = express();
 app.use(express.json());
+
+// Configure Nodemailer
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: process.env.SMTP_SECURE === 'true',
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+app.post('/api/send-support-email', async (req, res) => {
+  try {
+    const { to, subject, text, html } = req.body;
+
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      throw new Error('Configurações de e-mail (SMTP_USER/SMTP_PASS) não encontradas.');
+    }
+
+    const mailOptions = {
+      from: `"LD STORE Support" <${process.env.SMTP_USER}>`,
+      to,
+      subject,
+      text,
+      html,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Email sent:', info.messageId);
+    res.json({ success: true, messageId: info.messageId });
+  } catch (error: any) {
+    console.error('Email Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, getDocs, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { loadStripe } from '@stripe/stripe-js';
 import { ShoppingCart, Download, ExternalLink, Sparkles, Filter, Loader2, Copy, Check, QrCode, Clock, MessageSquare } from 'lucide-react';
@@ -38,11 +38,12 @@ export default function Store({ user }: StoreProps) {
   useEffect(() => {
     fetchData();
 
-    // Listen to unread support messages
+    // Listen to unread support messages (most recent ticket)
     const q = query(
       collection(db, 'support_tickets'),
       where('userId', '==', user.uid),
-      where('status', '==', 'open')
+      orderBy('updatedAt', 'desc'),
+      limit(1)
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       if (!snapshot.empty) {
@@ -197,9 +198,11 @@ export default function Store({ user }: StoreProps) {
       </div>
 
       <div className="space-y-10">
-        {categories.map((cat) => {
-          const catProducts = products.filter(p => p.categoryId === cat.id);
-          if (catProducts.length === 0) return null;
+        {categories
+          .filter(cat => !selectedCategory || cat.id === selectedCategory)
+          .map((cat) => {
+            const catProducts = products.filter(p => p.categoryId === cat.id);
+            if (catProducts.length === 0) return null;
 
           return (
             <div key={cat.id} className="space-y-4">
@@ -242,10 +245,12 @@ export default function Store({ user }: StoreProps) {
                         )}
 
                         {isOutOfStock && !isPurchased && !isPending && (
-                          <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10">
-                            <span className="px-3 py-1 rounded-full bg-red-500 text-white text-[10px] font-black uppercase tracking-widest">
-                              ESGOTADO
-                            </span>
+                          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-10">
+                            <div className="w-full bg-white/10 backdrop-blur-md py-2 flex items-center justify-center border-y border-white/20">
+                              <span className="text-white text-xs font-black uppercase tracking-[0.3em] animate-flash">
+                                ESGOTADO
+                              </span>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -253,13 +258,13 @@ export default function Store({ user }: StoreProps) {
                       <div className="p-4 space-y-3">
                         <div>
                           <h3 className="text-sm font-bold truncate text-gray-100">{prod.name}</h3>
-                          <p className="text-[10px] text-gray-500 line-clamp-1">{prod.description}</p>
+                          <p className="text-[10px] text-gray-500">{prod.description}</p>
                         </div>
 
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex flex-col">
                             <span className="text-[10px] text-gray-500 uppercase font-bold tracking-tighter">Preço</span>
-                            <span className="text-sm font-black text-white">R$ {prod.price.toFixed(2)}</span>
+                            <span className="text-sm font-black text-amber-400">R$ {prod.price.toFixed(2)}</span>
                           </div>
                           <div className="flex flex-col items-end">
                             <span className="text-[10px] text-gray-500 uppercase font-bold tracking-tighter">Disponível</span>
@@ -301,18 +306,19 @@ export default function Store({ user }: StoreProps) {
                             <button
                               onClick={() => handleBuy(prod)}
                               disabled={buyingId === prod.id || isOutOfStock}
-                              className={`w-full group/btn relative overflow-hidden py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${
+                              className={`w-full group/btn relative overflow-hidden py-3 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 shadow-lg animate-pulse-slow ${
                                 isOutOfStock 
                                   ? 'bg-white/5 text-gray-500 cursor-not-allowed' 
-                                  : 'bg-white text-black hover:bg-gray-200 active:scale-95'
+                                  : 'bg-gradient-to-r from-purple-900 via-indigo-950 to-purple-900 text-white hover:scale-[1.02] active:scale-95 shadow-purple-900/40'
                               }`}
                             >
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/btn:animate-[shimmer_1.5s_infinite] pointer-events-none" />
                               {buyingId === prod.id ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
                               ) : (
                                 <>
                                   <ShoppingCart className="w-4 h-4" />
-                                  <span>CARTÃO / STRIPE</span>
+                                  <span>COMPRAR COM CARTÃO</span>
                                 </>
                               )}
                             </button>
@@ -320,7 +326,7 @@ export default function Store({ user }: StoreProps) {
                             {!isOutOfStock && (
                               <button
                                 onClick={() => setPixProduct(prod)}
-                                className="w-full py-2.5 rounded-xl bg-purple-600/10 border border-purple-500/20 text-purple-400 text-xs font-bold hover:bg-purple-500/20 transition-all flex items-center justify-center gap-2"
+                                className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-black hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 animate-pulse-slow [animation-delay:1.5s]"
                               >
                                 <QrCode className="w-4 h-4" />
                                 PAGAR COM PIX

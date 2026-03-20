@@ -1,5 +1,5 @@
 {
   "name": "LD STORE",
   "description": "Premium App Store with Admin Dashboard, ImgBB hosting, and Stripe payments.",
-  "requestFramePermissions": []
+  "requestFramePermissions": ["notifications"]
 }
