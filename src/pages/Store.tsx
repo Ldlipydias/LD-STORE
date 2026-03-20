@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { loadStripe } from '@stripe/stripe-js';
-import { ShoppingCart, Download, ExternalLink, Sparkles, Filter, Loader2, Copy, Check, QrCode, Clock } from 'lucide-react';
+import { ShoppingCart, Download, ExternalLink, Sparkles, Filter, Loader2, Copy, Check, QrCode, Clock, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import PixPaymentModal from '../components/PixPaymentModal';
+import SupportModal from '../components/SupportModal';
 
 const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
 const stripePromise = STRIPE_PUBLISHABLE_KEY ? loadStripe(STRIPE_PUBLISHABLE_KEY) : null;
@@ -31,9 +32,28 @@ export default function Store({ user }: StoreProps) {
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [pixProduct, setPixProduct] = useState<any | null>(null);
+  const [isSupportOpen, setIsSupportOpen] = useState(false);
+  const [unreadSupportMessages, setUnreadSupportMessages] = useState(0);
 
   useEffect(() => {
     fetchData();
+
+    // Listen to unread support messages
+    const q = query(
+      collection(db, 'support_tickets'),
+      where('userId', '==', user.uid),
+      where('status', '==', 'open')
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const ticket = snapshot.docs[0].data();
+        setUnreadSupportMessages(ticket.unreadByUser || 0);
+      } else {
+        setUnreadSupportMessages(0);
+      }
+    });
+
+    return () => unsubscribe();
   }, [user]);
 
   const fetchData = async () => {
@@ -338,6 +358,26 @@ export default function Store({ user }: StoreProps) {
           }}
         />
       )}
+
+      {/* Floating Support Button */}
+      <button
+        onClick={() => setIsSupportOpen(true)}
+        className="fixed bottom-6 right-6 z-40 p-4 rounded-full bg-purple-600 text-white shadow-xl shadow-purple-500/30 hover:bg-purple-500 hover:scale-105 transition-all flex items-center justify-center group"
+      >
+        <MessageSquare className="w-6 h-6" />
+        {unreadSupportMessages > 0 && (
+          <span className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-[10px] font-black border-2 border-black animate-pulse">
+            {unreadSupportMessages}
+          </span>
+        )}
+      </button>
+
+      <SupportModal
+        isOpen={isSupportOpen}
+        onClose={() => setIsSupportOpen(false)}
+        userId={user.uid}
+        userEmail={user.email}
+      />
     </div>
   );
 }

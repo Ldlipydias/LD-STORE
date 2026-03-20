@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, setDoc, getDoc, onSnapshot, where, Timestamp } from 'firebase/firestore';
 import { uploadToImgBB } from '../services/imgbb';
-import { Plus, Trash2, Image as ImageIcon, Loader2, Lock, Edit2, X, Sparkles, Check, XCircle, ExternalLink, Bell } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, Loader2, Lock, Edit2, X, Sparkles, Check, XCircle, ExternalLink, Bell, MessageSquare, Users, Send } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Admin() {
@@ -15,6 +15,18 @@ export default function Admin() {
   const [pixSettings, setPixSettings] = useState({ pixKey: '', pixRecipient: '' });
   const [pendingOrders, setPendingOrders] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [supportTickets, setSupportTickets] = useState<any[]>([]);
+  const [supportQueueCount, setSupportQueueCount] = useState(110);
+  const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
+  const [adminReply, setAdminReply] = useState('');
+  const [replying, setReplying] = useState(false);
+
+  useEffect(() => {
+    if (selectedTicket) {
+      const updated = supportTickets.find(t => t.id === selectedTicket.id);
+      if (updated) setSelectedTicket(updated);
+    }
+  }, [supportTickets]);
 
   // Form states
   const [newCategory, setNewCategory] = useState('');
@@ -67,7 +79,57 @@ export default function Admin() {
         setPendingOrders(orders);
       });
 
-      return () => unsubscribe();
+      // Listen for support tickets
+      const supportQ = query(
+        collection(db, 'support_tickets'),
+        orderBy('updatedAt', 'desc')
+      );
+
+      const unsubscribeSupport = onSnapshot(supportQ, (snapshot) => {
+        const tickets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setSupportTickets(tickets);
+
+        // Check for new messages to show notification
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added' || change.type === 'modified') {
+            const ticket = { id: change.doc.id, ...change.doc.data() } as any;
+            if (ticket.unreadByAdmin > 0) {
+              setNotifications(prev => {
+                const existing = prev.find(n => n.id === `support-${ticket.id}`);
+                if (existing && existing.unreadCount === ticket.unreadByAdmin) return prev;
+                
+                const newNotif = {
+                  id: `support-${ticket.id}`,
+                  type: 'support',
+                  ticketId: ticket.id,
+                  userEmail: ticket.userEmail,
+                  unreadCount: ticket.unreadByAdmin,
+                  message: 'Nova mensagem de suporte'
+                };
+                
+                return [...prev.filter(n => n.id !== `support-${ticket.id}`), newNotif];
+              });
+            } else {
+               setNotifications(prev => prev.filter(n => n.id !== `support-${ticket.id}`));
+            }
+          }
+        });
+      });
+
+      // Listen for support queue count
+      const unsubscribeQueue = onSnapshot(doc(db, 'settings', 'support'), (docSnap) => {
+        if (docSnap.exists()) {
+          setSupportQueueCount(docSnap.data().virtualQueueCount || 0);
+        } else {
+          setDoc(doc(db, 'settings', 'support'), { virtualQueueCount: 110 });
+        }
+      });
+
+      return () => {
+        unsubscribe();
+        unsubscribeSupport();
+        unsubscribeQueue();
+      };
     }
   }, [isAuthorized]);
 
@@ -253,6 +315,65 @@ export default function Admin() {
     }
   };
 
+  const handleReplyTicket = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminReply.trim() || !selectedTicket) return;
+    setReplying(true);
+    try {
+      const newMessage = {
+        id: Date.now().toString(),
+        sender: 'admin',
+        text: adminReply,
+        createdAt: new Date().toISOString()
+      };
+
+      await updateDoc(doc(db, 'support_tickets', selectedTicket.id), {
+        messages: [...selectedTicket.messages, newMessage],
+        updatedAt: new Date().toISOString(),
+        unreadByUser: (selectedTicket.unreadByUser || 0) + 1,
+        unreadByAdmin: 0,
+        status: 'open'
+      });
+      setAdminReply('');
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setReplying(false);
+    }
+  };
+
+  const handleMarkTicketResolved = async (ticketId: string) => {
+    try {
+      await updateDoc(doc(db, 'support_tickets', ticketId), {
+        status: 'resolved',
+        updatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleUpdateQueueCount = async (newCount: number) => {
+    try {
+      await setDoc(doc(db, 'settings', 'support'), { virtualQueueCount: Math.max(0, newCount) }, { merge: true });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleSelectTicket = async (ticket: any) => {
+    setSelectedTicket(ticket);
+    if (ticket.unreadByAdmin > 0) {
+      try {
+        await updateDoc(doc(db, 'support_tickets', ticket.id), {
+          unreadByAdmin: 0
+        });
+      } catch (error) {
+        console.error(error);
+      }
+    }
+  };
+
   if (!isAuthorized) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6">
@@ -301,21 +422,46 @@ export default function Admin() {
               initial={{ opacity: 0, x: 100, scale: 0.8 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 100, scale: 0.8 }}
-              className="pointer-events-auto w-80 p-4 rounded-2xl bg-emerald-600 border border-emerald-400 shadow-2xl flex items-start gap-4"
+              className={`pointer-events-auto w-80 p-4 rounded-2xl border shadow-2xl flex items-start gap-4 ${
+                n.type === 'support' 
+                  ? 'bg-blue-600 border-blue-400' 
+                  : 'bg-emerald-600 border-emerald-400'
+              }`}
             >
               <div className="p-2 rounded-xl bg-white/20">
-                <Bell className="w-5 h-5 text-white" />
+                {n.type === 'support' ? <MessageSquare className="w-5 h-5 text-white" /> : <Bell className="w-5 h-5 text-white" />}
               </div>
               <div className="flex-1">
-                <p className="text-xs font-bold text-emerald-100 uppercase tracking-widest">Novo Pagamento PIX</p>
-                <p className="text-sm font-bold text-white line-clamp-1">{n.userEmail}</p>
-                <p className="text-xs text-emerald-100 mt-1">Comprou: {n.productName}</p>
-                <button
-                  onClick={() => handleApprovePix(n)}
-                  className="mt-3 w-full py-2 rounded-lg bg-white text-emerald-600 text-xs font-black hover:bg-emerald-50 transition-colors"
-                >
-                  LIBERAR AGORA
-                </button>
+                {n.type === 'support' ? (
+                  <>
+                    <p className="text-xs font-bold text-blue-100 uppercase tracking-widest">Suporte</p>
+                    <p className="text-sm font-bold text-white line-clamp-1">{n.userEmail}</p>
+                    <p className="text-xs text-blue-100 mt-1">{n.unreadCount} nova(s) mensagem(ns)</p>
+                    <button
+                      onClick={() => {
+                        const ticket = supportTickets.find(t => t.id === n.ticketId);
+                        if (ticket) handleSelectTicket(ticket);
+                        setNotifications(prev => prev.filter(notif => notif.id !== n.id));
+                        document.getElementById('support-section')?.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      className="mt-3 w-full py-2 rounded-lg bg-white text-blue-600 text-xs font-black hover:bg-blue-50 transition-colors"
+                    >
+                      VER MENSAGEM
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs font-bold text-emerald-100 uppercase tracking-widest">Novo Pagamento PIX</p>
+                    <p className="text-sm font-bold text-white line-clamp-1">{n.userEmail}</p>
+                    <p className="text-xs text-emerald-100 mt-1">Comprou: {n.productName}</p>
+                    <button
+                      onClick={() => handleApprovePix(n)}
+                      className="mt-3 w-full py-2 rounded-lg bg-white text-emerald-600 text-xs font-black hover:bg-emerald-50 transition-colors"
+                    >
+                      LIBERAR AGORA
+                    </button>
+                  </>
+                )}
               </div>
               <button 
                 onClick={() => setNotifications(prev => prev.filter(notif => notif.id !== n.id))}
@@ -417,6 +563,168 @@ export default function Admin() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* Support Tickets Section */}
+        <div id="support-section" className="lg:col-span-3 space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-black flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-blue-500/20">
+                <MessageSquare className="w-6 h-6 text-blue-500" />
+              </div>
+              SUPORTE & ATENDIMENTO
+              {supportTickets.filter(t => t.status === 'open').length > 0 && (
+                <span className="px-2 py-1 rounded-md bg-blue-500 text-white text-[10px] font-black">
+                  {supportTickets.filter(t => t.status === 'open').length}
+                </span>
+              )}
+            </h2>
+            <div className="flex items-center gap-4 bg-white/5 p-2 rounded-xl border border-white/10">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-gray-400" />
+                <span className="text-xs font-bold text-gray-400 uppercase hidden sm:inline">Fila Virtual:</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => handleUpdateQueueCount(supportQueueCount - 1)}
+                  className="w-8 h-8 rounded-lg bg-black border border-white/10 flex items-center justify-center hover:border-blue-500 transition-colors"
+                >
+                  -
+                </button>
+                <span className="font-mono font-bold w-8 text-center">{supportQueueCount}</span>
+                <button 
+                  onClick={() => handleUpdateQueueCount(supportQueueCount + 1)}
+                  className="w-8 h-8 rounded-lg bg-black border border-white/10 flex items-center justify-center hover:border-blue-500 transition-colors"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Ticket List */}
+            <div className="lg:col-span-1 space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+              {supportTickets.length === 0 ? (
+                <div className="p-8 rounded-3xl border-2 border-dashed border-white/5 text-center">
+                  <p className="text-gray-500 font-medium text-sm">Nenhum ticket de suporte.</p>
+                </div>
+              ) : (
+                supportTickets.map(ticket => (
+                  <button
+                    key={ticket.id}
+                    onClick={() => handleSelectTicket(ticket)}
+                    className={`w-full text-left p-4 rounded-2xl border transition-all ${
+                      selectedTicket?.id === ticket.id
+                        ? 'bg-blue-500/10 border-blue-500/50'
+                        : 'bg-white/5 border-white/10 hover:border-white/30'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md ${
+                        ticket.status === 'open' ? 'bg-amber-500/20 text-amber-500' : 'bg-emerald-500/20 text-emerald-500'
+                      }`}>
+                        {ticket.status === 'open' ? 'Aberto' : 'Resolvido'}
+                      </span>
+                      {ticket.unreadByAdmin > 0 && (
+                        <span className="w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">
+                          {ticket.unreadByAdmin}
+                        </span>
+                      )}
+                    </div>
+                    <p className="font-bold text-sm line-clamp-1">{ticket.userEmail}</p>
+                    <p className="text-xs text-gray-500 mt-1 line-clamp-1">Pedido: {ticket.orderId}</p>
+                    <p className="text-xs text-gray-400 mt-2 line-clamp-2">
+                      {ticket.messages[ticket.messages.length - 1]?.text}
+                    </p>
+                  </button>
+                ))
+              )}
+            </div>
+
+            {/* Chat Area */}
+            <div className="lg:col-span-2">
+              {selectedTicket ? (
+                <div className="flex flex-col h-[600px] rounded-3xl bg-white/5 border border-white/10 overflow-hidden">
+                  {/* Chat Header */}
+                  <div className="p-4 border-b border-white/10 bg-black/20 flex items-center justify-between">
+                    <div>
+                      <p className="font-bold">{selectedTicket.userEmail}</p>
+                      <p className="text-xs text-gray-500">Pedido: {selectedTicket.orderId}</p>
+                    </div>
+                    {selectedTicket.status === 'open' && (
+                      <button
+                        onClick={() => handleMarkTicketResolved(selectedTicket.id)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 text-emerald-500 text-xs font-bold hover:bg-emerald-500 hover:text-white transition-colors"
+                      >
+                        <Check className="w-4 h-4" />
+                        MARCAR RESOLVIDO
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Messages */}
+                  <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+                    {selectedTicket.messages.map((msg: any) => (
+                      <div
+                        key={msg.id}
+                        className={`flex flex-col ${msg.sender === 'admin' ? 'items-end' : 'items-start'}`}
+                      >
+                        <div
+                          className={`max-w-[80%] p-4 rounded-2xl ${
+                            msg.sender === 'admin'
+                              ? 'bg-blue-600 text-white rounded-tr-sm'
+                              : 'bg-white/10 text-gray-200 rounded-tl-sm'
+                          }`}
+                        >
+                          <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                          {msg.imageUrl && (
+                            <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mt-3">
+                              <img src={msg.imageUrl} alt="Anexo" className="max-w-full rounded-xl border border-white/10" />
+                            </a>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-gray-500 mt-1">
+                          {new Date(msg.createdAt).toLocaleTimeString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Reply Input */}
+                  {selectedTicket.status === 'open' ? (
+                    <form onSubmit={handleReplyTicket} className="p-4 border-t border-white/10 bg-black/20">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={adminReply}
+                          onChange={(e) => setAdminReply(e.target.value)}
+                          placeholder="Digite sua resposta..."
+                          className="flex-1 px-4 py-3 rounded-xl bg-black border border-white/10 focus:border-blue-500 outline-none text-sm"
+                        />
+                        <button
+                          type="submit"
+                          disabled={replying || !adminReply.trim()}
+                          className="px-6 py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-500 disabled:opacity-50 transition-colors flex items-center gap-2"
+                        >
+                          {replying ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="p-4 border-t border-white/10 bg-black/20 text-center">
+                      <p className="text-sm text-gray-500">Este ticket foi resolvido.</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="h-[600px] rounded-3xl border-2 border-dashed border-white/5 flex flex-col items-center justify-center text-gray-500">
+                  <MessageSquare className="w-12 h-12 mb-4 opacity-20" />
+                  <p>Selecione um ticket para visualizar.</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* PIX Settings Section */}
