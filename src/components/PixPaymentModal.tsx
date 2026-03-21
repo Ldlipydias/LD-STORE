@@ -77,12 +77,12 @@ export default function PixPaymentModal({ isOpen, onClose, product, userId, user
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black">
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="bg-zinc-900 border border-white/10 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto"
+            className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto"
           >
             <div className="p-6 border-b border-white/10 flex items-center justify-between sticky top-0 bg-zinc-900 z-10">
               <h3 className="text-xl font-black tracking-tighter flex items-center gap-2">
@@ -97,7 +97,7 @@ export default function PixPaymentModal({ isOpen, onClose, product, userId, user
             <div className="p-8 space-y-6 text-center">
               <div className="space-y-2">
                 <p className="text-sm text-gray-400">Valor a pagar:</p>
-                <p className="text-3xl font-black text-white">R$ {product.price.toFixed(2)}</p>
+                <p className="text-3xl font-black text-white">$ {product.price.toFixed(2)}</p>
               </div>
 
               <div className="space-y-3">

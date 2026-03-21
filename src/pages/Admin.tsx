@@ -2,17 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, setDoc, getDoc, onSnapshot, where, Timestamp } from 'firebase/firestore';
 import { uploadToImgBB } from '../services/imgbb';
-import { Plus, Trash2, Image as ImageIcon, Loader2, Lock, Edit2, X, Sparkles, Check, XCircle, ExternalLink, Bell, MessageSquare, Users, Send, ShoppingBag } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, Loader2, Lock, Edit2, X, Sparkles, Check, XCircle, ExternalLink, Bell, MessageSquare, Users, Send, ShoppingBag, Mail } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Admin() {
   const [pin, setPin] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
-  const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pixSettings, setPixSettings] = useState({ pixKey: '', pixRecipient: '' });
+  const [supportEmail, setSupportEmail] = useState('kakaxe188@gmail.com');
   const [pendingOrders, setPendingOrders] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [supportTickets, setSupportTickets] = useState<any[]>([]);
@@ -20,7 +20,11 @@ export default function Admin() {
   const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
   const [adminReply, setAdminReply] = useState('');
   const [replying, setReplying] = useState(false);
+  const [testingEmail, setTestingEmail] = useState(false);
+  const [testEmailResult, setTestEmailResult] = useState<{ success: boolean; message: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'orders' | 'support' | 'products' | 'settings'>('orders');
+  const [showDeliverModal, setShowDeliverModal] = useState(false);
+  const [delivering, setDelivering] = useState(false);
 
   useEffect(() => {
     if (selectedTicket) {
@@ -30,12 +34,10 @@ export default function Admin() {
   }, [supportTickets]);
 
   // Form states
-  const [newCategory, setNewCategory] = useState('');
   const [productForm, setProductForm] = useState({
     name: '',
     description: '',
     price: '',
-    categoryId: '',
     downloadUrl: '',
     stock: '10',
     image: null as File | null
@@ -45,6 +47,7 @@ export default function Admin() {
     if (isAuthorized) {
       fetchData();
       fetchPixSettings();
+      fetchSupportSettings();
 
       // Listen for pending PIX orders
       const q = query(
@@ -135,9 +138,6 @@ export default function Admin() {
   }, [isAuthorized]);
 
   const fetchData = async () => {
-    const cats = await getDocs(query(collection(db, 'categories'), orderBy('name')));
-    setCategories(cats.docs.map(d => ({ id: d.id, ...d.data() })));
-    
     const prods = await getDocs(query(collection(db, 'products'), orderBy('name')));
     setProducts(prods.docs.map(d => ({ id: d.id, ...d.data() })));
   };
@@ -146,6 +146,14 @@ export default function Admin() {
     const settingsDoc = await getDoc(doc(db, 'settings', 'pix'));
     if (settingsDoc.exists()) {
       setPixSettings(settingsDoc.data() as any);
+    }
+  };
+
+  const fetchSupportSettings = async () => {
+    const supportDoc = await getDoc(doc(db, 'settings', 'support'));
+    if (supportDoc.exists()) {
+      const data = supportDoc.data();
+      if (data.email) setSupportEmail(data.email);
     }
   };
 
@@ -162,6 +170,50 @@ export default function Admin() {
     }
   };
 
+  const handleUpdateSupportEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await setDoc(doc(db, 'settings', 'support'), { email: supportEmail }, { merge: true });
+      alert('E-mail de suporte atualizado!');
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTestEmailConfig = async () => {
+    setTestingEmail(true);
+    setTestEmailResult(null);
+    try {
+      const response = await fetch('/api/test-email-config');
+      const contentType = response.headers.get('content-type');
+      
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        setTestEmailResult({
+          success: data.success,
+          message: data.success ? data.message : `Erro: ${data.error}`
+        });
+      } else {
+        const text = await response.text();
+        console.error('Non-JSON response:', text);
+        setTestEmailResult({
+          success: false,
+          message: `Erro do servidor: O servidor retornou uma resposta inesperada (HTML). Isso pode acontecer se o servidor estiver reiniciando. Por favor, aguarde alguns segundos e tente novamente.`
+        });
+      }
+    } catch (error: any) {
+      setTestEmailResult({
+        success: false,
+        message: `Erro de conexão: ${error.message}`
+      });
+    } finally {
+      setTestingEmail(false);
+    }
+  };
+
   const [error, setError] = useState<string | null>(null);
 
   const handlePinSubmit = (e: React.FormEvent) => {
@@ -174,24 +226,9 @@ export default function Admin() {
     }
   };
 
-  const handleAddCategory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCategory) return;
-    setLoading(true);
-    try {
-      await addDoc(collection(db, 'categories'), { name: newCategory });
-      setNewCategory('');
-      fetchData();
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!productForm.name || !productForm.price || !productForm.categoryId) return;
+    if (!productForm.name || !productForm.price) return;
     setLoading(true);
     try {
       let imageUrl = '';
@@ -205,7 +242,6 @@ export default function Admin() {
           description: productForm.description,
           price: parseFloat(productForm.price),
           stock: parseInt(productForm.stock) || 0,
-          categoryId: productForm.categoryId,
           downloadUrl: productForm.downloadUrl,
         };
         if (imageUrl) updateData.imageUrl = imageUrl;
@@ -223,13 +259,12 @@ export default function Admin() {
           description: productForm.description,
           price: parseFloat(productForm.price),
           stock: parseInt(productForm.stock) || 0,
-          categoryId: productForm.categoryId,
           downloadUrl: productForm.downloadUrl,
           imageUrl,
           createdAt: new Date().toISOString()
         });
       }
-      setProductForm({ name: '', description: '', price: '', categoryId: '', downloadUrl: '', stock: '10', image: null });
+      setProductForm({ name: '', description: '', price: '', downloadUrl: '', stock: '10', image: null });
       fetchData();
     } catch (error: any) {
       console.error(error);
@@ -245,7 +280,6 @@ export default function Admin() {
       name: prod.name,
       description: prod.description || '',
       price: prod.price.toString(),
-      categoryId: prod.categoryId,
       downloadUrl: prod.downloadUrl || '',
       stock: (prod.stock || 0).toString(),
       image: null
@@ -335,11 +369,95 @@ export default function Admin() {
         unreadByAdmin: 0,
         status: 'open'
       });
+
+      const response = await fetch('/api/send-support-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: selectedTicket.userEmail,
+          subject: `[Suporte] Resposta ao seu chamado - LD STORE`,
+          text: `Você recebeu uma nova resposta no seu chamado de suporte: "${adminReply.substring(0, 100)}..."`,
+          html: `
+            <div style="font-family: sans-serif; padding: 20px; color: #333;">
+              <h2 style="color: #6366f1;">Nova Resposta do Suporte</h2>
+              <p>Olá, você recebeu uma nova resposta no seu chamado de suporte.</p>
+              <div style="background: #f3f4f6; padding: 15px; border-radius: 10px; margin: 20px 0;">
+                <p style="margin: 0; font-style: italic;">"${adminReply}"</p>
+              </div>
+              <p>Acesse a loja para visualizar a conversa completa.</p>
+            </div>
+          `
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Email notification error:', errorData.error);
+      }
+
       setAdminReply('');
     } catch (error) {
       console.error(error);
     } finally {
       setReplying(false);
+    }
+  };
+
+  const handleDeliverProduct = async (product: any) => {
+    if (!selectedTicket || !product) return;
+    setDelivering(true);
+    try {
+      // 1. Send email with product
+      const response = await fetch('/api/send-support-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: selectedTicket.userEmail,
+          subject: `[Entrega] Seu produto: ${product.name} - LD STORE`,
+          text: `Olá! Seu produto "${product.name}" está pronto para download. Link: ${product.downloadUrl}`,
+          html: `
+            <div style="font-family: sans-serif; padding: 20px; color: #333;">
+              <h2 style="color: #6366f1;">Entrega de Produto</h2>
+              <p>Olá! Seu produto <strong>${product.name}</strong> já está disponível.</p>
+              <div style="margin: 30px 0;">
+                <a href="${product.downloadUrl}" style="background: #6366f1; color: white; padding: 12px 25px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                  BAIXAR PRODUTO AGORA
+                </a>
+              </div>
+              <p style="font-size: 12px; color: #666;">Se o botão acima não funcionar, copie e cole este link no seu navegador: ${product.downloadUrl}</p>
+              <p>Obrigado por comprar na LD STORE!</p>
+            </div>
+          `
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erro ao enviar e-mail de entrega');
+      }
+
+      // 2. Add message to chat
+      const newMessage = {
+        id: Date.now().toString(),
+        sender: 'admin',
+        text: `PRODUTO ENTREGUE VIA E-MAIL: ${product.name}`,
+        createdAt: new Date().toISOString()
+      };
+
+      await updateDoc(doc(db, 'support_tickets', selectedTicket.id), {
+        messages: [...selectedTicket.messages, newMessage],
+        updatedAt: new Date().toISOString(),
+        unreadByUser: (selectedTicket.unreadByUser || 0) + 1,
+        unreadByAdmin: 0
+      });
+
+      alert('Produto entregue com sucesso via e-mail!');
+      setShowDeliverModal(false);
+    } catch (error: any) {
+      console.error(error);
+      alert('Erro ao entregar produto: ' + error.message);
+    } finally {
+      setDelivering(false);
     }
   };
 
@@ -383,8 +501,8 @@ export default function Admin() {
           animate={{ opacity: 1, scale: 1 }}
           className="p-8 rounded-3xl bg-white/5 border border-white/10 w-full max-w-md text-center space-y-6"
         >
-          <div className="w-16 h-16 bg-amber-500/20 rounded-2xl flex items-center justify-center mx-auto">
-            <Lock className="w-8 h-8 text-amber-500" />
+          <div className="w-16 h-16 bg-purple-500/20 rounded-2xl flex items-center justify-center mx-auto">
+            <Lock className="w-8 h-8 text-purple-500" />
           </div>
           <h2 className="text-2xl font-bold">Acesso Restrito</h2>
           <p className="text-gray-400">Insira o PIN do administrador para continuar.</p>
@@ -397,12 +515,12 @@ export default function Admin() {
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               placeholder="Digite o PIN"
-              className="w-full px-4 py-3 rounded-xl bg-black border border-white/20 focus:border-amber-500 outline-none text-center text-2xl tracking-widest"
+              className="w-full px-4 py-3 rounded-xl bg-black border border-white/20 focus:border-purple-500 outline-none text-center text-2xl tracking-widest"
               maxLength={4}
             />
             <button
               type="submit"
-              className="w-full py-3 rounded-xl bg-amber-500 text-black font-bold hover:bg-amber-400 transition-colors"
+              className="w-full py-3 rounded-xl bg-purple-500 text-black font-bold hover:bg-purple-400 transition-colors"
             >
               Entrar
             </button>
@@ -414,6 +532,54 @@ export default function Admin() {
 
   return (
     <div className="space-y-12 pb-20 relative">
+      {/* Deliver Product Modal */}
+      <AnimatePresence>
+        {showDeliverModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl"
+            >
+              <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                <h3 className="text-xl font-black tracking-tighter">ENTREGAR PRODUTO</h3>
+                <button onClick={() => setShowDeliverModal(false)} className="p-2 hover:bg-white/5 rounded-full">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                <p className="text-sm text-gray-400">Selecione o produto para enviar ao e-mail do cliente:</p>
+                <div className="space-y-2">
+                  {products.map(prod => (
+                    <button
+                      key={prod.id}
+                      disabled={delivering}
+                      onClick={() => handleDeliverProduct(prod)}
+                      className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-amber-500/50 transition-all text-left flex items-center justify-between group"
+                    >
+                      <div>
+                        <p className="font-bold text-sm">{prod.name}</p>
+                        <p className="text-xs text-gray-500">$ {prod.price.toFixed(2)}</p>
+                      </div>
+                      <Send className="w-4 h-4 text-gray-500 group-hover:text-amber-500 transition-colors" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {delivering && (
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                  <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+                    <p className="text-sm font-bold">Enviando e-mail...</p>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Floating Notifications */}
       <div className="fixed bottom-8 right-8 z-50 space-y-4 pointer-events-none">
         <AnimatePresence>
@@ -476,7 +642,7 @@ export default function Admin() {
       </div>
       <div className="flex items-center justify-between">
         <h1 className="text-4xl font-black tracking-tighter">PAINEL ADM</h1>
-        <div className="px-4 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold uppercase tracking-widest">
+        <div className="px-4 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-500 text-xs font-bold uppercase tracking-widest">
           ADMINISTRADOR
         </div>
       </div>
@@ -498,17 +664,17 @@ export default function Admin() {
                 : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
             }`}
           >
-            <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-amber-500' : ''}`} />
+            <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-purple-500' : ''}`} />
             {tab.label}
             {tab.count > 0 && (
-              <span className="px-1.5 py-0.5 rounded-md bg-amber-500 text-black text-[10px] font-black">
+              <span className="px-1.5 py-0.5 rounded-md bg-purple-500 text-black text-[10px] font-black">
                 {tab.count}
               </span>
             )}
             {activeTab === tab.id && (
               <motion.div 
                 layoutId="activeTab"
-                className="absolute bottom-0 left-0 right-0 h-1 bg-amber-500"
+                className="absolute bottom-0 left-0 right-0 h-1 bg-purple-500"
               />
             )}
           </button>
@@ -519,8 +685,8 @@ export default function Admin() {
         {activeTab === 'orders' && (
           <div className="space-y-6">
             <h2 className="text-2xl font-black flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-amber-500/20">
-                <Sparkles className="w-6 h-6 text-amber-500" />
+              <div className="p-2 rounded-xl bg-purple-500/20">
+                <Sparkles className="w-6 h-6 text-purple-500" />
               </div>
               PEDIDOS PIX PENDENTES
             </h2>
@@ -546,7 +712,7 @@ export default function Admin() {
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Valor</p>
-                      <p className="text-emerald-400 font-black">R$ {(order.price || order.amount || 0).toFixed(2)}</p>
+                      <p className="text-emerald-400 font-black">$ {(order.price || order.amount || 0).toFixed(2)}</p>
                     </div>
                   </div>
 
@@ -584,7 +750,7 @@ export default function Admin() {
                     </button>
                     <button
                       onClick={() => handleApprovePix(order)}
-                      className="flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500 text-black font-black text-sm hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20"
+                      className="flex items-center justify-center gap-2 py-3 rounded-xl bg-purple-500 text-black font-black text-sm hover:bg-purple-400 transition-all shadow-lg shadow-purple-500/20"
                     >
                       <Check className="w-4 h-4" />
                       LIBERAR
@@ -602,12 +768,12 @@ export default function Admin() {
           <div id="support-section" className="space-y-6">
             <div className="flex items-center justify-between">
             <h2 className="text-2xl font-black flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-blue-500/20">
-                <MessageSquare className="w-6 h-6 text-blue-500" />
+              <div className="p-2 rounded-xl bg-purple-500/20">
+                <MessageSquare className="w-6 h-6 text-purple-500" />
               </div>
               SUPORTE & ATENDIMENTO
               {supportTickets.filter(t => t.status === 'open').length > 0 && (
-                <span className="px-2 py-1 rounded-md bg-blue-500 text-white text-[10px] font-black">
+                <span className="px-2 py-1 rounded-md bg-purple-500 text-white text-[10px] font-black">
                   {supportTickets.filter(t => t.status === 'open').length}
                 </span>
               )}
@@ -620,14 +786,14 @@ export default function Admin() {
               <div className="flex items-center gap-2">
                 <button 
                   onClick={() => handleUpdateQueueCount(supportQueueCount - 1)}
-                  className="w-8 h-8 rounded-lg bg-black border border-white/10 flex items-center justify-center hover:border-blue-500 transition-colors"
+                  className="w-8 h-8 rounded-lg bg-black border border-white/10 flex items-center justify-center hover:border-purple-500 transition-colors"
                 >
                   -
                 </button>
                 <span className="font-mono font-bold w-8 text-center">{supportQueueCount}</span>
                 <button 
                   onClick={() => handleUpdateQueueCount(supportQueueCount + 1)}
-                  className="w-8 h-8 rounded-lg bg-black border border-white/10 flex items-center justify-center hover:border-blue-500 transition-colors"
+                  className="w-8 h-8 rounded-lg bg-black border border-white/10 flex items-center justify-center hover:border-purple-500 transition-colors"
                 >
                   +
                 </button>
@@ -644,27 +810,27 @@ export default function Admin() {
                 </div>
               ) : (
                 supportTickets.map(ticket => (
-                  <button
-                    key={ticket.id}
-                    onClick={() => handleSelectTicket(ticket)}
-                    className={`w-full text-left p-4 rounded-2xl border transition-all ${
-                      selectedTicket?.id === ticket.id
-                        ? 'bg-blue-500/10 border-blue-500/50'
-                        : 'bg-white/5 border-white/10 hover:border-white/30'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md ${
-                        ticket.status === 'open' ? 'bg-amber-500/20 text-amber-500' : 'bg-emerald-500/20 text-emerald-500'
-                      }`}>
-                        {ticket.status === 'open' ? 'Aberto' : 'Resolvido'}
-                      </span>
-                      {ticket.unreadByAdmin > 0 && (
-                        <span className="w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">
-                          {ticket.unreadByAdmin}
+                    <button
+                      key={ticket.id}
+                      onClick={() => handleSelectTicket(ticket)}
+                      className={`w-full text-left p-4 rounded-2xl border transition-all ${
+                        selectedTicket?.id === ticket.id
+                          ? 'bg-purple-500/10 border-purple-500/50'
+                          : 'bg-white/5 border-white/10 hover:border-white/30'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md ${
+                          ticket.status === 'open' ? 'bg-purple-500/20 text-purple-500' : 'bg-emerald-500/20 text-emerald-500'
+                        }`}>
+                          {ticket.status === 'open' ? 'Aberto' : 'Resolvido'}
                         </span>
-                      )}
-                    </div>
+                        {ticket.unreadByAdmin > 0 && (
+                          <span className="w-5 h-5 rounded-full bg-purple-500 text-white text-[10px] font-bold flex items-center justify-center">
+                            {ticket.unreadByAdmin}
+                          </span>
+                        )}
+                      </div>
                     <p className="font-bold text-sm line-clamp-1">{ticket.userEmail}</p>
                     <p className="text-xs text-gray-500 mt-1 line-clamp-1">Pedido: {ticket.orderId}</p>
                     <p className="text-xs text-gray-400 mt-2 line-clamp-2">
@@ -685,15 +851,24 @@ export default function Admin() {
                       <p className="font-bold">{selectedTicket.userEmail}</p>
                       <p className="text-xs text-gray-500">Pedido: {selectedTicket.orderId}</p>
                     </div>
-                    {selectedTicket.status === 'open' && (
-                      <button
-                        onClick={() => handleMarkTicketResolved(selectedTicket.id)}
-                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 text-emerald-500 text-xs font-bold hover:bg-emerald-500 hover:text-white transition-colors"
-                      >
-                        <Check className="w-4 h-4" />
-                        MARCAR RESOLVIDO
-                      </button>
-                    )}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setShowDeliverModal(true)}
+                          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-500/10 text-purple-500 text-xs font-bold hover:bg-purple-500 hover:text-black transition-colors"
+                        >
+                          <ShoppingBag className="w-4 h-4" />
+                          ENTREGAR PRODUTO
+                        </button>
+                      {selectedTicket.status === 'open' && (
+                        <button
+                          onClick={() => handleMarkTicketResolved(selectedTicket.id)}
+                          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 text-emerald-500 text-xs font-bold hover:bg-emerald-500 hover:text-white transition-colors"
+                        >
+                          <Check className="w-4 h-4" />
+                          MARCAR RESOLVIDO
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Messages */}
@@ -706,7 +881,7 @@ export default function Admin() {
                         <div
                           className={`max-w-[80%] p-4 rounded-2xl ${
                             msg.sender === 'admin'
-                              ? 'bg-blue-600 text-white rounded-tr-sm'
+                              ? 'bg-purple-600 text-white rounded-tr-sm'
                               : 'bg-white/10 text-gray-200 rounded-tl-sm'
                           }`}
                         >
@@ -733,12 +908,12 @@ export default function Admin() {
                           value={adminReply}
                           onChange={(e) => setAdminReply(e.target.value)}
                           placeholder="Digite sua resposta..."
-                          className="flex-1 px-4 py-3 rounded-xl bg-black border border-white/10 focus:border-blue-500 outline-none text-sm"
+                          className="flex-1 px-4 py-3 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none text-sm"
                         />
                         <button
                           type="submit"
                           disabled={replying || !adminReply.trim()}
-                          className="px-6 py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-500 disabled:opacity-50 transition-colors flex items-center gap-2"
+                          className="px-6 py-3 rounded-xl bg-purple-600 text-white font-bold hover:bg-purple-500 disabled:opacity-50 transition-colors flex items-center gap-2"
                         >
                           {replying ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                         </button>
@@ -764,78 +939,99 @@ export default function Admin() {
         {/* PIX Settings Section */}
         {activeTab === 'settings' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-            <div className="space-y-6">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-emerald-400" />
-                Configurações PIX
-              </h2>
-          <form onSubmit={handleUpdatePixSettings} className="space-y-4 p-6 rounded-3xl bg-white/5 border border-white/10">
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Chave PIX (E-mail, CPF, Telefone ou Aleatória)</label>
-              <input
-                type="text"
-                value={pixSettings.pixKey}
-                onChange={(e) => setPixSettings({ ...pixSettings, pixKey: e.target.value })}
-                placeholder="Chave PIX"
-                className="w-full px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-emerald-500 outline-none text-sm"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Nome do Destinatário (Exato)</label>
-              <input
-                type="text"
-                value={pixSettings.pixRecipient}
-                onChange={(e) => setPixSettings({ ...pixSettings, pixRecipient: e.target.value })}
-                placeholder="Nome Completo"
-                className="w-full px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-emerald-500 outline-none text-sm"
-              />
-              <p className="text-[10px] text-gray-500 italic">A IA usará este nome para validar o comprovante.</p>
-            </div>
-            <button
-              disabled={loading}
-              className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors font-bold text-sm"
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Salvar Dados PIX'}
-            </button>
-          </form>
-        </div>
-
-        <div className="space-y-6">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <Plus className="w-5 h-5 text-purple-400" />
-            Categorias
-          </h2>
-          <form onSubmit={handleAddCategory} className="flex gap-2">
-            <input
-              type="text"
-              value={newCategory}
-              onChange={(e) => setNewCategory(e.target.value)}
-              placeholder="Nova categoria"
-              className="flex-1 px-4 py-2 rounded-xl bg-white/5 border border-white/10 focus:border-purple-500 outline-none"
-            />
-            <button
-              disabled={loading}
-              className="p-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 transition-colors"
-            >
-              <Plus className="w-6 h-6" />
-            </button>
-          </form>
-          <div className="space-y-2">
-            {categories.map(cat => (
-              <div key={cat.id} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10 group">
-                <span>{cat.name}</span>
-                <button
-                  onClick={() => handleDelete('categories', cat.id)}
-                  className="p-1 text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+            <div className="space-y-12">
+              <div className="space-y-6">
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-400" />
+                  Configurações PIX
+                </h2>
+                <form onSubmit={handleUpdatePixSettings} className="space-y-4 p-6 rounded-3xl bg-white/5 border border-white/10">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Chave PIX (E-mail, CPF, Telefone ou Aleatória)</label>
+                    <input
+                      type="text"
+                      value={pixSettings.pixKey}
+                      onChange={(e) => setPixSettings({ ...pixSettings, pixKey: e.target.value })}
+                      placeholder="Chave PIX"
+                      className="w-full px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Nome do Destinatário (Exato)</label>
+                    <input
+                      type="text"
+                      value={pixSettings.pixRecipient}
+                      onChange={(e) => setPixSettings({ ...pixSettings, pixRecipient: e.target.value })}
+                      placeholder="Nome Completo"
+                      className="w-full px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none text-sm"
+                    />
+                    <p className="text-[10px] text-gray-500 italic">A IA usará este nome para validar o comprovante.</p>
+                  </div>
+                  <button
+                    disabled={loading}
+                    className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 transition-colors font-bold text-sm"
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Salvar Dados PIX'}
+                  </button>
+                </form>
               </div>
-            ))}
+
+              <div className="space-y-6">
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <Mail className="w-5 h-5 text-purple-400" />
+                  E-mail de Suporte
+                </h2>
+                <form onSubmit={handleUpdateSupportEmail} className="space-y-4 p-6 rounded-3xl bg-white/5 border border-white/10">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">E-mail para Notificações</label>
+                    <input
+                      type="email"
+                      value={supportEmail}
+                      onChange={(e) => setSupportEmail(e.target.value)}
+                      placeholder="seu-email@exemplo.com"
+                      className="w-full px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none text-sm"
+                    />
+                    <p className="text-[10px] text-gray-500 italic">Este e-mail receberá notificações de novos chamados.</p>
+                  </div>
+                  <button
+                    disabled={loading}
+                    className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 transition-colors font-bold text-sm"
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Salvar E-mail'}
+                  </button>
+                </form>
+
+                <div className="p-6 rounded-3xl bg-white/5 border border-white/10 space-y-4">
+                  <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400">Diagnóstico de E-mail</h3>
+                  <p className="text-xs text-gray-500">Clique no botão abaixo para testar se a conexão com o servidor de e-mail (SMTP) está funcionando corretamente.</p>
+                  
+                  <button
+                    onClick={handleTestEmailConfig}
+                    disabled={testingEmail}
+                    className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-50 transition-colors font-bold text-sm flex items-center justify-center gap-2"
+                  >
+                    {testingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                    TESTAR CONEXÃO SMTP
+                  </button>
+
+                  {testEmailResult && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`p-4 rounded-xl text-xs font-medium ${
+                        testEmailResult.success 
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                          : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                      }`}
+                    >
+                      {testEmailResult.message}
+                    </motion.div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
         {/* Products Section */}
         {activeTab === 'products' && (
@@ -843,14 +1039,14 @@ export default function Admin() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold flex items-center gap-2">
-              {editingId ? <Edit2 className="w-5 h-5 text-amber-400" /> : <Plus className="w-5 h-5 text-pink-400" />}
+              {editingId ? <Edit2 className="w-5 h-5 text-purple-400" /> : <Plus className="w-5 h-5 text-purple-400" />}
               {editingId ? 'Editar Produto' : 'Novo Produto'}
             </h2>
             {editingId && (
               <button
                 onClick={() => {
                   setEditingId(null);
-                  setProductForm({ name: '', description: '', price: '', categoryId: '', downloadUrl: '', stock: '10', image: null });
+                  setProductForm({ name: '', description: '', price: '', downloadUrl: '', stock: '10', image: null });
                 }}
                 className="flex items-center gap-1 text-xs font-bold text-gray-400 hover:text-white transition-colors"
               >
@@ -866,39 +1062,29 @@ export default function Admin() {
                 value={productForm.name}
                 onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
                 placeholder="Nome do produto"
-                className="w-full px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-pink-500 outline-none"
+                className="w-full px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none"
               />
               <textarea
                 value={productForm.description}
                 onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
                 placeholder="Descrição"
-                className="w-full px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-pink-500 outline-none h-24"
+                className="w-full px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none h-24"
               />
               <div className="flex gap-4">
                 <input
                   type="number"
                   value={productForm.price}
                   onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
-                  placeholder="Preço (R$)"
-                  className="flex-1 px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-pink-500 outline-none"
+                  placeholder="Preço ($)"
+                  className="flex-1 px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none"
                 />
                 <input
                   type="number"
                   value={productForm.stock}
                   onChange={(e) => setProductForm({ ...productForm, stock: e.target.value })}
                   placeholder="Estoque"
-                  className="w-24 px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-pink-500 outline-none"
+                  className="flex-1 px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none"
                 />
-                <select
-                  value={productForm.categoryId}
-                  onChange={(e) => setProductForm({ ...productForm, categoryId: e.target.value })}
-                  className="flex-1 px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-pink-500 outline-none"
-                >
-                  <option value="">Categoria</option>
-                  {categories.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                  ))}
-                </select>
               </div>
             </div>
             <div className="space-y-4">
@@ -907,14 +1093,14 @@ export default function Admin() {
                 value={productForm.downloadUrl}
                 onChange={(e) => setProductForm({ ...productForm, downloadUrl: e.target.value })}
                 placeholder="Link de Download ou Acesso (Mega, Drive, Link, etc.)"
-                className="w-full px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-pink-500 outline-none"
+                className="w-full px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none"
               />
-              <label className="flex flex-col items-center justify-center w-full h-32 rounded-xl border-2 border-dashed border-white/10 hover:border-pink-500/50 cursor-pointer transition-colors group">
+              <label className="flex flex-col items-center justify-center w-full h-32 rounded-xl border-2 border-dashed border-white/10 hover:border-purple-500/50 cursor-pointer transition-colors group">
                 {productForm.image ? (
-                  <span className="text-pink-400 text-sm font-medium">{productForm.image.name}</span>
+                  <span className="text-purple-400 text-sm font-medium">{productForm.image.name}</span>
                 ) : (
                   <>
-                    <ImageIcon className="w-8 h-8 text-gray-500 group-hover:text-pink-400 transition-colors" />
+                    <ImageIcon className="w-8 h-8 text-gray-500 group-hover:text-purple-400 transition-colors" />
                     <span className="text-gray-500 text-xs mt-2">Upload Capa (16:9)</span>
                   </>
                 )}
@@ -930,8 +1116,8 @@ export default function Admin() {
                 disabled={loading}
                 className={`w-full py-3 rounded-xl text-white font-bold disabled:opacity-50 flex items-center justify-center gap-2 transition-all ${
                   editingId 
-                    ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500' 
-                    : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500'
+                    ? 'bg-gradient-to-r from-purple-600 to-purple-400 hover:from-purple-500 hover:to-purple-300' 
+                    : 'bg-gradient-to-r from-purple-600 to-purple-400 hover:from-purple-500 hover:to-purple-300'
                 }`}
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (editingId ? 'Salvar Alterações' : 'Cadastrar Produto')}
@@ -946,7 +1132,7 @@ export default function Admin() {
                 <div className="flex-1">
                   <h3 className="font-bold">{prod.name}</h3>
                   <div className="flex items-center gap-3">
-                    <p className="text-purple-400 font-bold">R$ {prod.price.toFixed(2)}</p>
+                    <p className="text-purple-400 font-bold">$ {prod.price.toFixed(2)}</p>
                     <div className="flex items-center gap-2 bg-white/5 px-2 py-1 rounded-lg border border-white/10">
                       <span className="text-[10px] text-gray-500 uppercase font-bold">Estoque:</span>
                       <input

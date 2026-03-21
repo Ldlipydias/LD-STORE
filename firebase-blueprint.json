@@ -1,14 +1,5 @@
 {
   "entities": {
-    "Category": {
-      "title": "Category",
-      "description": "App category",
-      "type": "object",
-      "properties": {
-        "name": { "type": "string", "description": "Category name" }
-      },
-      "required": ["name"]
-    },
     "Product": {
       "title": "Product",
       "description": "App or digital product",
@@ -18,11 +9,10 @@
         "description": { "type": "string", "description": "Product description" },
         "price": { "type": "number", "description": "Product price" },
         "imageUrl": { "type": "string", "description": "Product image URL (ImgBB)" },
-        "categoryId": { "type": "string", "description": "Category ID" },
         "stripePriceId": { "type": "string", "description": "Stripe Price ID" },
         "downloadUrl": { "type": "string", "description": "Download link after purchase" }
       },
-      "required": ["name", "price", "imageUrl", "categoryId"]
+      "required": ["name", "price", "imageUrl"]
     },
     "User": {
       "title": "User",
@@ -66,7 +56,6 @@
     }
   },
   "firestore": {
-    "/categories/{categoryId}": { "schema": "Category", "description": "Categories collection" },
     "/products/{productId}": { "schema": "Product", "description": "Products collection" },
     "/users/{userId}": { "schema": "User", "description": "Users collection" },
     "/orders/{orderId}": { "schema": "Order", "description": "Orders collection" },

@@ -21,6 +21,7 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
   const [message, setMessage] = useState('');
   const [attachment, setAttachment] = useState<File | null>(null);
   const [queueCount, setQueueCount] = useState(110);
+  const [supportEmail, setSupportEmail] = useState('kakaxe188@gmail.com');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Form for new ticket
@@ -57,18 +58,21 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
       setLoading(false);
     });
 
-    // Listen to global queue count
-    const queueUnsubscribe = onSnapshot(doc(db, 'settings', 'support'), (docSnap) => {
+    // Listen to global settings
+    const settingsUnsubscribe = onSnapshot(doc(db, 'settings', 'support'), (docSnap) => {
       if (docSnap.exists()) {
-        setQueueCount(docSnap.data().virtualQueueCount || 110);
+        const data = docSnap.data();
+        setQueueCount(data.virtualQueueCount || 110);
+        if (data.email) setSupportEmail(data.email);
       } else {
         setQueueCount(110);
+        setSupportEmail('kakaxe188@gmail.com');
       }
     });
 
     return () => {
       unsubscribe();
-      queueUnsubscribe();
+      settingsUnsubscribe();
     };
   }, [isOpen, userId]);
 
@@ -110,8 +114,8 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
 
       // Send email notification to admin
       await sendSupportEmail(
-        'kakaxe188@gmail.com',
-        'Novo Chamado de Suporte - LD STORE',
+        supportEmail,
+        `[Suporte] Novo Chamado de ${userEmail || 'Usuário'}`,
         `${userEmail || 'Um usuário'} abriu um novo chamado: ${message.substring(0, 100)}...`,
         `
           <div style="font-family: sans-serif; padding: 20px; color: #333;">
@@ -123,7 +127,8 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
             </div>
             <p>Acesse o painel administrativo para responder.</p>
           </div>
-        `
+        `,
+        userEmail || undefined
       );
 
       setMessage('');
@@ -165,8 +170,8 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
 
       // Send email notification to admin
       await sendSupportEmail(
-        'kakaxe188@gmail.com',
-        'Nova Mensagem de Suporte - LD STORE',
+        supportEmail,
+        `[Suporte] Nova Mensagem de ${userEmail || 'Usuário'}`,
         `${userEmail || 'Um usuário'} enviou uma mensagem: ${message.substring(0, 100)}...`,
         `
           <div style="font-family: sans-serif; padding: 20px; color: #333;">
@@ -177,7 +182,8 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
             </div>
             <p>Acesse o painel administrativo para visualizar e responder.</p>
           </div>
-        `
+        `,
+        userEmail || undefined
       );
 
       setMessage('');
@@ -193,14 +199,14 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black">
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="bg-zinc-900 border border-white/10 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col h-[80vh]"
+            className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col h-[80vh]"
           >
-            <div className="p-4 border-b border-white/10 flex items-center justify-between bg-zinc-900 z-10">
+            <div className="p-4 border-b border-white/10 flex items-center justify-between bg-black/40 backdrop-blur-md z-10">
               <h3 className="text-lg font-black tracking-tighter flex items-center gap-2">
                 <MessageSquare className="w-5 h-5 text-purple-400" />
                 SUPORTE

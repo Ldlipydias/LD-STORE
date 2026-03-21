@@ -8,39 +8,100 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
-// Configure Nodemailer
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
+let transporter: nodemailer.Transporter | null = null;
+
+function getTransporter() {
+  if (!transporter) {
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const port = parseInt(process.env.SMTP_PORT || '587');
+    const secure = process.env.SMTP_SECURE === 'true';
+
+    console.log('Initializing SMTP Transporter with:', {
+      host,
+      port,
+      secure,
+      user: user ? 'Configured' : 'MISSING',
+      pass: pass ? 'Configured' : 'MISSING'
+    });
+
+    if (!user || !pass) {
+      return null;
+    }
+
+    transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth: {
+        user,
+        pass,
+      },
+    });
+  }
+  return transporter;
+}
+
+app.get('/api/test-email-config', async (req, res) => {
+  try {
+    const mailTransporter = getTransporter();
+    if (!mailTransporter) {
+      return res.json({ 
+        success: false, 
+        error: 'Configuração SMTP incompleta (SMTP_USER ou SMTP_PASS faltando).' 
+      });
+    }
+
+    await mailTransporter.verify();
+    res.json({ 
+      success: true, 
+      message: 'Configuração SMTP válida e conexão estabelecida com sucesso!' 
+    });
+  } catch (error: any) {
+    console.error('SMTP Verify Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      code: error.code,
+      command: error.command
+    });
+  }
 });
 
 app.post('/api/send-support-email', async (req, res) => {
   try {
-    const { to, subject, text, html } = req.body;
+    const { to, subject, text, html, replyTo } = req.body;
+    console.log('Attempting to send email to:', to);
 
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      throw new Error('Configurações de e-mail (SMTP_USER/SMTP_PASS) não encontradas.');
+    const mailTransporter = getTransporter();
+    if (!mailTransporter) {
+      console.warn('SMTP configuration missing. Skipping email notification.');
+      return res.status(200).json({ 
+        success: false, 
+        message: 'Configurações de e-mail (SMTP_USER/SMTP_PASS) não encontradas. O e-mail não foi enviado, mas a ação foi registrada.',
+        skipped: true 
+      });
     }
 
     const mailOptions = {
-      from: `"LD STORE Support" <${process.env.SMTP_USER}>`,
+      from: `"${process.env.SMTP_FROM_NAME || 'LD STORE'}" <${process.env.SMTP_USER}>`,
       to,
       subject,
       text,
       html,
+      replyTo: replyTo || process.env.SMTP_USER,
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log('Email sent:', info.messageId);
+    const info = await mailTransporter.sendMail(mailOptions);
+    console.log('Email sent successfully:', info.messageId);
     res.json({ success: true, messageId: info.messageId });
   } catch (error: any) {
-    console.error('Email Error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Email Send Error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      details: 'Verifique se a "Senha de App" do Gmail está correta e se a Verificação em Duas Etapas está ativada.'
+    });
   }
 });
 

@@ -1,4 +1,4 @@
-export const sendSupportEmail = async (to: string, subject: string, text: string, html?: string) => {
+export const sendSupportEmail = async (to: string, subject: string, text: string, html?: string, replyTo?: string) => {
   try {
     const response = await fetch('/api/send-support-email', {
       method: 'POST',
@@ -10,6 +10,7 @@ export const sendSupportEmail = async (to: string, subject: string, text: string
         subject,
         text,
         html,
+        replyTo,
       }),
     });
 

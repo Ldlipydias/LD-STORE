@@ -60,7 +60,7 @@ export default function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-black text-white font-sans selection:bg-purple-500/30">
+      <div className="min-h-screen text-white font-sans selection:bg-purple-500/30">
         <Navbar user={user} isAdmin={isAdmin} />
         <main className="container mx-auto px-4 py-8">
           <Routes>
