@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, setDoc, getDoc, onSnapshot, where, Timestamp } from 'firebase/firestore';
 import { uploadToImgBB } from '../services/imgbb';
-import { Plus, Trash2, Image as ImageIcon, Loader2, Lock, Edit2, X, Sparkles, Check, XCircle, ExternalLink, Bell, MessageSquare, Users, Send, ShoppingBag, Mail } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, Loader2, Lock, Edit2, X, Sparkles, Check, XCircle, ExternalLink, Bell, MessageSquare, Users, Send, ShoppingBag, Mail, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Admin() {
@@ -25,6 +25,10 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState<'orders' | 'support' | 'products' | 'settings'>('orders');
   const [showDeliverModal, setShowDeliverModal] = useState(false);
   const [delivering, setDelivering] = useState(false);
+  const [rejectingOrder, setRejectingOrder] = useState<any | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{ show: boolean; title: string; message: string; onConfirm: () => void } | null>(null);
 
   useEffect(() => {
     if (selectedTicket) {
@@ -183,6 +187,22 @@ export default function Admin() {
     }
   };
 
+  const handleTestApiHealth = async () => {
+    try {
+      const response = await fetch('/api/health');
+      const data = await response.json();
+      setTestEmailResult({
+        success: true,
+        message: `API Health: ${data.status} às ${new Date(data.timestamp).toLocaleString()}`
+      });
+    } catch (error: any) {
+      setTestEmailResult({
+        success: false,
+        message: `Erro de Saúde da API: ${error.message}`
+      });
+    }
+  };
+
   const handleTestEmailConfig = async () => {
     setTestingEmail(true);
     setTestEmailResult(null);
@@ -288,9 +308,22 @@ export default function Admin() {
   };
 
   const handleDelete = async (coll: string, id: string) => {
-    if (!confirm('Tem certeza que deseja excluir?')) return;
-    await deleteDoc(doc(db, coll, id));
-    fetchData();
+    setConfirmModal({
+      show: true,
+      title: 'Confirmar Exclusão',
+      message: 'Tem certeza que deseja excluir este item? Esta ação não pode ser desfeita.',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, coll, id));
+          fetchData();
+        } catch (error) {
+          console.error(error);
+          alert('Erro ao excluir item.');
+        } finally {
+          setConfirmModal(null);
+        }
+      }
+    });
   };
 
   const handleUpdateStock = async (id: string, newStock: number) => {
@@ -303,50 +336,58 @@ export default function Admin() {
   };
 
   const handleApprovePix = async (order: any) => {
-    if (!confirm(`Liberar produto "${order.productName}" para ${order.userEmail}?`)) return;
-    setLoading(true);
-    try {
-      // 1. Update order status
-      await updateDoc(doc(db, 'orders', order.id), {
-        status: 'paid',
-        approvedAt: new Date().toISOString()
-      });
+    setConfirmModal({
+      show: true,
+      title: 'Aprovar Pagamento',
+      message: `Deseja aprovar o pagamento de $ ${order.total.toFixed(2)} para o produto ${order.productName}?`,
+      onConfirm: async () => {
+        setLoading(true);
+        try {
+          // 1. Update order status
+          await updateDoc(doc(db, 'orders', order.id), {
+            status: 'paid',
+            approvedAt: new Date().toISOString()
+          });
 
-      // 2. Decrease stock
-      const productDoc = await getDoc(doc(db, 'products', order.productId));
-      if (productDoc.exists()) {
-        const currentStock = productDoc.data().stock || 0;
-        await updateDoc(doc(db, 'products', order.productId), {
-          stock: Math.max(0, currentStock - 1)
-        });
+          // 2. Decrease stock
+          const productDoc = await getDoc(doc(db, 'products', order.productId));
+          if (productDoc.exists()) {
+            const currentStock = productDoc.data().stock || 0;
+            await updateDoc(doc(db, 'products', order.productId), {
+              stock: Math.max(0, currentStock - 1)
+            });
+          }
+
+          alert('Produto liberado com sucesso!');
+          fetchData();
+        } catch (error) {
+          console.error(error);
+          alert('Erro ao liberar produto.');
+        } finally {
+          setLoading(false);
+          setConfirmModal(null);
+        }
       }
-
-      alert('Produto liberado com sucesso!');
-      fetchData();
-    } catch (error) {
-      console.error(error);
-      alert('Erro ao liberar produto.');
-    } finally {
-      setLoading(false);
-    }
+    });
   };
 
-  const handleRejectPix = async (order: any) => {
-    const reason = prompt('Motivo da rejeição (opcional):');
-    if (reason === null) return;
+  const handleRejectPix = async () => {
+    if (!rejectingOrder) return;
 
-    setLoading(true);
+    setIsRejecting(true);
     try {
-      await updateDoc(doc(db, 'orders', order.id), {
+      await updateDoc(doc(db, 'orders', rejectingOrder.id), {
         status: 'rejected',
-        rejectionReason: reason,
+        rejectionReason: rejectionReason,
         rejectedAt: new Date().toISOString()
       });
-      alert('Pedido rejeitado.');
+      setRejectingOrder(null);
+      setRejectionReason('');
     } catch (error) {
       console.error(error);
+      alert('Erro ao rejeitar pedido.');
     } finally {
-      setLoading(false);
+      setIsRejecting(false);
     }
   };
 
@@ -578,6 +619,80 @@ export default function Admin() {
             </motion.div>
           </div>
         )}
+
+        {rejectingOrder && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-zinc-900 border border-white/10 rounded-[2rem] w-full max-w-md p-8 space-y-6"
+            >
+              <div className="text-center space-y-2">
+                <h2 className="text-xl font-black uppercase tracking-tight">Rejeitar Pedido</h2>
+                <p className="text-gray-400 text-sm">Informe o motivo da rejeição para o cliente.</p>
+              </div>
+
+              <textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Ex: Comprovante inválido, valor incorreto..."
+                className="w-full px-4 py-3 rounded-xl bg-black border border-white/10 focus:border-red-500 outline-none h-32 text-sm"
+              />
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setRejectingOrder(null);
+                    setRejectionReason('');
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 font-bold text-sm transition-all"
+                >
+                  CANCELAR
+                </button>
+                <button
+                  onClick={handleRejectPix}
+                  disabled={isRejecting}
+                  className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-sm transition-all flex items-center justify-center gap-2"
+                >
+                  {isRejecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                  REJEITAR AGORA
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {confirmModal && confirmModal.show && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-zinc-900 border border-white/10 rounded-[2rem] w-full max-w-md p-8 space-y-6"
+            >
+              <div className="text-center space-y-2">
+                <h2 className="text-xl font-black uppercase tracking-tight">{confirmModal.title}</h2>
+                <p className="text-gray-400 text-sm">{confirmModal.message}</p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmModal(null)}
+                  className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 font-bold text-sm transition-all"
+                >
+                  CANCELAR
+                </button>
+                <button
+                  onClick={confirmModal.onConfirm}
+                  className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm transition-all"
+                >
+                  CONFIRMAR
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
 
       {/* Floating Notifications */}
@@ -742,7 +857,7 @@ export default function Admin() {
 
                   <div className="grid grid-cols-2 gap-3 pt-2">
                     <button
-                      onClick={() => handleRejectPix(order)}
+                      onClick={() => setRejectingOrder(order)}
                       className="flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 text-red-500 font-bold text-sm hover:bg-red-500 hover:text-white transition-all"
                     >
                       <XCircle className="w-4 h-4" />
@@ -1005,14 +1120,28 @@ export default function Admin() {
                   <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400">Diagnóstico de E-mail</h3>
                   <p className="text-xs text-gray-500">Clique no botão abaixo para testar se a conexão com o servidor de e-mail (SMTP) está funcionando corretamente.</p>
                   
-                  <button
-                    onClick={handleTestEmailConfig}
-                    disabled={testingEmail}
-                    className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-50 transition-colors font-bold text-sm flex items-center justify-center gap-2"
-                  >
-                    {testingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                    TESTAR CONEXÃO SMTP
-                  </button>
+                  <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-400 font-bold leading-relaxed">
+                    IMPORTANTE: Para Gmail, você DEVE usar uma "Senha de App" e ter a Verificação em Duas Etapas ativada. Senhas normais não funcionam em servidores de nuvem como o Netlify.
+                  </div>
+
+                  <div className="flex gap-4">
+                    <button
+                      onClick={handleTestApiHealth}
+                      className="flex-1 py-3 rounded-xl bg-white/10 hover:bg-white/20 transition-colors font-bold text-sm flex items-center justify-center gap-2"
+                    >
+                      <Activity className="w-4 h-4" />
+                      SAÚDE DA API
+                    </button>
+                    
+                    <button
+                      onClick={handleTestEmailConfig}
+                      disabled={testingEmail}
+                      className="flex-1 py-3 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-50 transition-colors font-bold text-sm flex items-center justify-center gap-2"
+                    >
+                      {testingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                      TESTAR SMTP
+                    </button>
+                  </div>
 
                   {testEmailResult && (
                     <motion.div

@@ -2,11 +2,18 @@ import express from 'express';
 import Stripe from 'stripe';
 import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
+import cors from 'cors';
 
 dotenv.config();
 
 const app = express();
+app.use(cors());
 app.use(express.json());
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -45,11 +52,30 @@ function getTransporter() {
 
 app.get('/api/test-email-config', async (req, res) => {
   try {
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const port = process.env.SMTP_PORT || '587';
+    
+    console.log('Testing SMTP with:', {
+      host,
+      port,
+      user: user ? 'Configured' : 'MISSING',
+      pass: pass ? 'Configured' : 'MISSING',
+      env: process.env.NODE_ENV
+    });
+
     const mailTransporter = getTransporter();
     if (!mailTransporter) {
       return res.json({ 
         success: false, 
-        error: 'Configuração SMTP incompleta (SMTP_USER ou SMTP_PASS faltando).' 
+        error: 'Configuração SMTP incompleta. Verifique se SMTP_USER e SMTP_PASS estão definidos no Netlify.',
+        envVars: {
+          SMTP_USER: !!user,
+          SMTP_PASS: !!pass,
+          SMTP_HOST: !!process.env.SMTP_HOST,
+          SMTP_PORT: !!process.env.SMTP_PORT
+        }
       });
     }
 
@@ -64,7 +90,8 @@ app.get('/api/test-email-config', async (req, res) => {
       success: false, 
       error: error.message,
       code: error.code,
-      command: error.command
+      command: error.command,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
