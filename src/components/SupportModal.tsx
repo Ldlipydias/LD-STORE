@@ -5,6 +5,7 @@ import { db } from '../firebase';
 import { collection, addDoc, doc, getDoc, updateDoc, onSnapshot, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import { uploadToImgBB } from '../services/imgbb';
 import { sendSupportEmail } from '../services/api';
+import { notifyAdmin } from '../services/notifications';
 
 interface SupportModalProps {
   isOpen: boolean;
@@ -113,6 +114,12 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
       });
 
       // Send email notification to admin
+      await notifyAdmin(
+        'Novo Chamado de Suporte',
+        `${userEmail || 'Um usuário'} abriu um novo chamado: ${message.substring(0, 50)}...`,
+        '/admin'
+      );
+
       await sendSupportEmail(
         supportEmail,
         `[Suporte] Novo Chamado de ${userEmail || 'Usuário'}`,
@@ -169,6 +176,12 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
       });
 
       // Send email notification to admin
+      await notifyAdmin(
+        'Nova Mensagem de Suporte',
+        `${userEmail || 'Um usuário'} enviou uma mensagem: ${message.substring(0, 50)}...`,
+        '/admin'
+      );
+
       await sendSupportEmail(
         supportEmail,
         `[Suporte] Nova Mensagem de ${userEmail || 'Usuário'}`,

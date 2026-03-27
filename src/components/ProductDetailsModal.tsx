@@ -75,8 +75,8 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, o
                   <div className="p-2 bg-purple-500/10 rounded-xl border border-purple-500/20">
                     <Package className="w-5 h-5 text-purple-400" />
                   </div>
-                  <h2 className="text-2xl font-black tracking-tighter text-white uppercase">
-                    {product.name}
+                  <h2 className="text-2xl font-black tracking-tighter text-white uppercase flex items-center gap-3">
+                    <span>🎁</span> {product.name}
                   </h2>
                 </div>
 
@@ -87,8 +87,8 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, o
                 </div>
 
                 <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-black text-white">$ {product.price.toFixed(2)}</span>
-                  <span className="text-sm text-gray-500 font-bold">À vista no Pix</span>
+                  <span className="text-4xl font-black text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.4)]">R$ {product.price.toFixed(2)}</span>
+                  <span className="text-sm text-gray-500 font-bold uppercase tracking-widest">À vista no Pix</span>
                 </div>
               </div>
 
@@ -112,11 +112,13 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, o
                       {selectedOption === 0 && <div className="w-2 h-2 bg-white rounded-full" />}
                     </div>
                     <div className="text-left">
-                      <p className="font-black text-sm text-white uppercase tracking-tight">{product.name}</p>
+                      <p className="font-black text-sm text-white uppercase tracking-tight flex items-center gap-2">
+                        <span>🎁</span> {product.name}
+                      </p>
                       <p className="text-xs text-emerald-400 font-bold">{product.stock || 0} em estoque</p>
                     </div>
                   </div>
-                  <span className="font-black text-white">$ {product.price.toFixed(2)}</span>
+                  <span className="font-black text-yellow-400">R$ {product.price.toFixed(2)}</span>
                 </button>
               </div>
 

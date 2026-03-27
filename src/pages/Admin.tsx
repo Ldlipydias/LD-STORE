@@ -29,6 +29,70 @@ export default function Admin() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [isRejecting, setIsRejecting] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{ show: boolean; title: string; message: string; onConfirm: () => void } | null>(null);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
+
+  useEffect(() => {
+    // Check if already subscribed
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      navigator.serviceWorker.ready.then(registration => {
+        registration.pushManager.getSubscription().then(subscription => {
+          setPushSubscribed(!!subscription);
+        });
+      });
+    }
+  }, []);
+
+  const subscribeToPush = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      alert('Seu navegador não suporta notificações push.');
+      return;
+    }
+
+    setSubscribing(true);
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      
+      // Get VAPID public key from server
+      const response = await fetch('/api/push/vapid-public-key');
+      const { publicKey } = await response.json();
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey)
+      });
+
+      // Send subscription to server
+      await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(subscription)
+      });
+
+      setPushSubscribed(true);
+      alert('Notificações ativadas com sucesso! Você receberá alertas reais no seu celular.');
+    } catch (error: any) {
+      console.error('Push subscription error:', error);
+      alert('Erro ao ativar notificações: ' + error.message);
+    } finally {
+      setSubscribing(false);
+    }
+  };
+
+  const urlBase64ToUint8Array = (base64String: string) => {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  };
 
   useEffect(() => {
     if (selectedTicket) {
@@ -785,6 +849,25 @@ export default function Admin() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 bg-white/[0.03] p-2 rounded-2xl border border-white/5">
+          <button
+            onClick={subscribeToPush}
+            disabled={subscribing || pushSubscribed}
+            className={`flex items-center gap-2 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              pushSubscribed 
+                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' 
+                : 'bg-amber-500 text-black hover:bg-amber-400 shadow-lg shadow-amber-500/20'
+            }`}
+          >
+            {subscribing ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : pushSubscribed ? (
+              <Check className="w-3 h-3" />
+            ) : (
+              <Bell className="w-3 h-3" />
+            )}
+            {pushSubscribed ? 'NOTIFICAÇÕES ATIVAS' : 'ATIVAR NOTIFICAÇÕES REAL'}
+          </button>
+
           {[
             { id: 'orders', label: 'Pedidos', icon: ShoppingBag, count: pendingOrders.length },
             { id: 'support', label: 'Suporte', icon: MessageSquare, count: supportTickets.filter(t => t.unreadByAdmin).length },

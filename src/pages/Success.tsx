@@ -5,6 +5,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { CheckCircle2, Loader2, XCircle, Download, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
+import { notifyAdmin } from '../services/notifications';
 
 interface SuccessProps {
   user: User | null;
@@ -60,6 +61,13 @@ export default function Success({ user }: SuccessProps) {
               createdAt: new Date().toISOString(),
               approvedAt: new Date().toISOString()
             });
+
+            // Notificar administrador
+            await notifyAdmin(
+              'Venda Aprovada (Stripe)',
+              `${user.email || 'Um usuário'} comprou ${productData.name} por R$ ${productData.price}.`,
+              '/admin'
+            );
           }
 
           setStatus('success');

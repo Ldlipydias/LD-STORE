@@ -229,11 +229,11 @@ export default function Store({ user }: StoreProps) {
 
               <div className="p-4 md:p-8 pt-2 md:pt-4 space-y-4 md:space-y-6">
                 <div className="space-y-2">
-                  <h3 className="text-sm md:text-xl font-black tracking-tight text-white/90 group-hover:text-purple-400 transition-colors duration-300 line-clamp-1">
-                    {prod.name}
+                  <h3 className="text-sm md:text-xl font-black tracking-tight text-white/90 group-hover:text-purple-400 transition-colors duration-300 line-clamp-1 flex items-center gap-2">
+                    <span>🎁</span> {prod.name}
                   </h3>
                   <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
-                    <span className="text-lg md:text-2xl font-black text-white tracking-tighter">
+                    <span className="text-lg md:text-2xl font-black text-yellow-400 tracking-tighter drop-shadow-[0_0_10px_rgba(250,204,21,0.3)]">
                       R$ {prod.price.toFixed(2)}
                     </span>
                     <span className="text-[8px] md:text-[10px] text-gray-500 font-bold uppercase tracking-widest md:border-l md:border-white/10 md:pl-3">

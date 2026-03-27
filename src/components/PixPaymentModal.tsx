@@ -4,6 +4,7 @@ import { X, QrCode, Copy, Check, Loader2, Upload, Image as ImageIcon } from 'luc
 import { db } from '../firebase';
 import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
 import { uploadToImgBB } from '../services/imgbb';
+import { notifyAdmin } from '../services/notifications';
 
 interface PixPaymentModalProps {
   isOpen: boolean;
@@ -57,8 +58,14 @@ export default function PixPaymentModal({ isOpen, onClose, product, userId, user
         createdAt: new Date().toISOString()
       });
 
-      // Notificar administrador por e-mail
+      // Notificar administrador por e-mail e push
       try {
+        await notifyAdmin(
+          'Novo Pagamento PIX',
+          `${userEmail || 'Um usuário'} enviou um comprovante para ${product.name}.`,
+          '/admin'
+        );
+
         await fetch('/api/send-support-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
