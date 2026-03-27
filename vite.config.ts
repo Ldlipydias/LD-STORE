@@ -48,7 +48,7 @@ export default defineConfig(({mode}) => {
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || ''),
       'import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY': JSON.stringify(process.env.VITE_STRIPE_PUBLISHABLE_KEY || env.VITE_STRIPE_PUBLISHABLE_KEY || ''),
-      'import.meta.env.VITE_VAPID_PUBLIC_KEY': JSON.stringify(process.env.VITE_VAPID_PUBLIC_KEY || env.VITE_VAPID_PUBLIC_KEY || 'BJcK_d5G9Dg5pAqu8bWp3j6WmmdSsj2DiGwHyqErjOzsx609wZO81aWf_CM086Pll5q4gnD2Dg89P2OZd6Fe9xs'),
+      'import.meta.env.VITE_VAPID_PUBLIC_KEY': JSON.stringify(process.env.VITE_VAPID_PUBLIC_KEY || env.VITE_VAPID_PUBLIC_KEY || ''),
       'import.meta.env.VITE_IMGBB_API_KEY': JSON.stringify(process.env.VITE_IMGBB_API_KEY || env.VITE_IMGBB_API_KEY || ''),
       'import.meta.env.VITE_FIREBASE_API_KEY': JSON.stringify(process.env.VITE_FIREBASE_API_KEY || env.VITE_FIREBASE_API_KEY || ''),
       'import.meta.env.VITE_FIREBASE_AUTH_DOMAIN': JSON.stringify(process.env.VITE_FIREBASE_AUTH_DOMAIN || env.VITE_FIREBASE_AUTH_DOMAIN || ''),

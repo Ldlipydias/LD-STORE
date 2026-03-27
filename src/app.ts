@@ -12,15 +12,17 @@ app.use(cors());
 app.use(express.json());
 
 // Web Push Configuration
-const vapidPublicKey = process.env.VITE_VAPID_PUBLIC_KEY || 'BJcK_d5G9Dg5pAqu8bWp3j6WmmdSsj2DiGwHyqErjOzsx609wZO81aWf_CM086Pll5q4gnD2Dg89P2OZd6Fe9xs';
-const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || 'eW9MB1uclvTwoWA7Nl1O6BcBNS0YNK3OKup1_fi3AdE';
-const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
+const vapidPublicKey = process.env.VITE_VAPID_PUBLIC_KEY;
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+const vapidSubject = process.env.VAPID_SUBJECT;
 
-webpush.setVapidDetails(
-  vapidSubject,
-  vapidPublicKey,
-  vapidPrivateKey
-);
+if (vapidSubject && vapidPublicKey && vapidPrivateKey) {
+  webpush.setVapidDetails(
+    vapidSubject,
+    vapidPublicKey,
+    vapidPrivateKey
+  );
+}
 
 // In-memory subscription store (for demo/simple use)
 // In a real app, store this in Firestore or a database
