@@ -58,12 +58,30 @@
         "pixRecipient": { "type": "string", "description": "PIX Recipient Name" }
       },
       "required": ["pixKey", "pixRecipient"]
+    },
+    "AdminSubscription": {
+      "title": "AdminSubscription",
+      "description": "Push notification subscription for admin",
+      "type": "object",
+      "properties": {
+        "endpoint": { "type": "string", "description": "Push endpoint URL" },
+        "keys": { 
+          "type": "object", 
+          "properties": {
+            "p256dh": { "type": "string" },
+            "auth": { "type": "string" }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["endpoint", "keys"]
     }
   },
   "firestore": {
     "/products/{productId}": { "schema": "Product", "description": "Products collection" },
     "/users/{userId}": { "schema": "User", "description": "Users collection" },
     "/orders/{orderId}": { "schema": "Order", "description": "Orders collection" },
-    "/settings/{settingId}": { "schema": "Setting", "description": "Settings collection" }
+    "/settings/{settingId}": { "schema": "Setting", "description": "Settings collection" },
+    "/admin_subscriptions/{subId}": { "schema": "AdminSubscription", "description": "Admin push subscriptions" }
   }
 }

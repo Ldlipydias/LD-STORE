@@ -4,6 +4,10 @@ import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
 import cors from 'cors';
 import webpush from 'web-push';
+import admin from 'firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
 
@@ -11,8 +15,25 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Firebase Configuration for Server
+const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+let firebaseConfig: any = {};
+if (fs.existsSync(configPath)) {
+  firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+}
+
+// Initialize Firebase Admin
+if (!admin.apps.length) {
+  admin.initializeApp({
+    projectId: firebaseConfig.projectId
+  });
+}
+
+// CRITICAL: Must specify the databaseId for non-default databases in AI Studio
+const db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId || '(default)');
+
 // Web Push Configuration
-const vapidPublicKey = process.env.VITE_VAPID_PUBLIC_KEY;
+const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY;
 const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
 const vapidSubject = process.env.VAPID_SUBJECT;
 
@@ -23,10 +44,6 @@ if (vapidSubject && vapidPublicKey && vapidPrivateKey) {
     vapidPrivateKey
   );
 }
-
-// In-memory subscription store (for demo/simple use)
-// In a real app, store this in Firestore or a database
-let adminSubscriptions: any[] = [];
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -209,58 +226,72 @@ app.get('/api/push/vapid-public-key', (req, res) => {
   res.json({ publicKey: vapidPublicKey });
 });
 
-app.post('/api/push/subscribe', (req, res) => {
-  const subscription = req.body;
-  
-  // Check if subscription already exists
-  const exists = adminSubscriptions.find(s => s.endpoint === subscription.endpoint);
-  if (!exists) {
-    adminSubscriptions.push(subscription);
-    console.log('New admin subscription added. Total:', adminSubscriptions.length);
+app.post('/api/push/subscribe', async (req, res) => {
+  try {
+    const subscription = req.body;
+    
+    // Check if subscription already exists in Firestore
+    const snapshot = await db.collection('admin_subscriptions')
+      .where('endpoint', '==', subscription.endpoint)
+      .get();
+    
+    if (snapshot.empty) {
+      await db.collection('admin_subscriptions').add({
+        ...subscription,
+        createdAt: new Date().toISOString()
+      });
+      console.log('New admin subscription added to Firestore.');
+    }
+    
+    res.status(201).json({ success: true });
+  } catch (error: any) {
+    console.error('Subscription Error:', error);
+    res.status(500).json({ error: error.message });
   }
-  
-  res.status(201).json({ success: true });
 });
 
 app.post('/api/push/notify-admin', async (req, res) => {
-  const { title, body, icon, url } = req.body;
-  
-  const payload = JSON.stringify({
-    title: title || 'Nova Notificação',
-    body: body || 'Você tem uma nova mensagem.',
-    icon: icon || '/pwa-192x192.png',
-    data: {
-      url: url || '/admin'
-    }
-  });
-
-  console.log(`Sending push notification to ${adminSubscriptions.length} admins: ${title}`);
-
-  const notifications = adminSubscriptions.map(subscription => {
-    return webpush.sendNotification(subscription, payload)
-      .catch(error => {
-        console.error('Error sending push notification:', error.endpoint, error.statusCode);
-        if (error.statusCode === 410 || error.statusCode === 404) {
-          // Subscription has expired or is no longer valid
-          return { error, expired: true, endpoint: subscription.endpoint };
-        }
-        return { error };
-      });
-  });
-
-  const results = await Promise.all(notifications);
-  
-  // Clean up expired subscriptions
-  const expiredEndpoints = results
-    .filter((r: any) => r && r.expired)
-    .map((r: any) => r.endpoint);
+  try {
+    const { title, body, icon, url } = req.body;
     
-  if (expiredEndpoints.length > 0) {
-    adminSubscriptions = adminSubscriptions.filter(s => !expiredEndpoints.includes(s.endpoint));
-    console.log(`Removed ${expiredEndpoints.length} expired subscriptions.`);
-  }
+    const payload = JSON.stringify({
+      title: title || 'Nova Notificação',
+      body: body || 'Você tem uma nova mensagem.',
+      icon: icon || '/pwa-192x192.png',
+      data: {
+        url: url || '/admin'
+      }
+    });
 
-  res.json({ success: true, sentCount: adminSubscriptions.length });
+    // Fetch all subscriptions from Firestore
+    const snapshot = await db.collection('admin_subscriptions').get();
+    const adminSubscriptions = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    console.log(`Sending push notification to ${adminSubscriptions.length} admins: ${title}`);
+
+    const notifications = adminSubscriptions.map((subscription: any) => {
+      return webpush.sendNotification(subscription, payload)
+        .catch(async (error) => {
+          console.error('Error sending push notification:', error.endpoint, error.statusCode);
+          if (error.statusCode === 410 || error.statusCode === 404) {
+            // Subscription has expired or is no longer valid, delete from Firestore
+            try {
+              await db.collection('admin_subscriptions').doc(subscription.id).delete();
+              console.log('Removed expired subscription from Firestore.');
+            } catch (delErr) {
+              console.error('Error deleting expired subscription:', delErr);
+            }
+          }
+          return { error };
+        });
+    });
+
+    await Promise.all(notifications);
+    res.json({ success: true, sentCount: adminSubscriptions.length });
+  } catch (error: any) {
+    console.error('Notify Admin Error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 export default app;

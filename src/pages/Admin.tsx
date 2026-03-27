@@ -31,13 +31,26 @@ export default function Admin() {
   const [confirmModal, setConfirmModal] = useState<{ show: boolean; title: string; message: string; onConfirm: () => void } | null>(null);
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [subscribing, setSubscribing] = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
 
   useEffect(() => {
+    if (typeof Notification !== 'undefined') {
+      setPushPermission(Notification.permission);
+    }
+
     // Check if already subscribed
     if ('serviceWorker' in navigator && 'PushManager' in window) {
       navigator.serviceWorker.ready.then(registration => {
         registration.pushManager.getSubscription().then(subscription => {
-          setPushSubscribed(!!subscription);
+          if (subscription) {
+            setPushSubscribed(true);
+            // Re-sync with server to ensure it's in Firestore
+            fetch('/api/push/subscribe', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(subscription)
+            }).catch(err => console.error('Push re-sync error:', err));
+          }
         });
       });
     }
@@ -62,6 +75,8 @@ export default function Admin() {
         applicationServerKey: urlBase64ToUint8Array(publicKey)
       });
 
+      setPushPermission(Notification.permission);
+
       // Send subscription to server
       await fetch('/api/push/subscribe', {
         method: 'POST',
@@ -76,6 +91,28 @@ export default function Admin() {
       alert('Erro ao ativar notificações: ' + error.message);
     } finally {
       setSubscribing(false);
+    }
+  };
+
+  const handleTestPushNotification = async () => {
+    try {
+      const response = await fetch('/api/push/notify-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: '🔔 Teste de Notificação',
+          body: 'Esta é uma notificação de teste enviada do painel administrativo. Se você recebeu isso, as notificações estão funcionando!',
+          url: '/admin'
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert(`Notificação enviada com sucesso para ${data.sentCount} dispositivo(s)!`);
+      } else {
+        alert('Erro ao enviar notificação. Verifique se você ativou as notificações neste dispositivo.');
+      }
+    } catch (error: any) {
+      alert('Erro: ' + error.message);
     }
   };
 
@@ -142,6 +179,18 @@ export default function Admin() {
                 if (prev.some(n => n.id === newOrder.id)) return prev;
                 return [...prev, newOrder];
               });
+
+              // Trigger Real Push Notification to Admin
+              fetch('/api/push/notify-admin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  title: '💰 Novo Pedido PIX',
+                  body: `Novo pedido de ${newOrder.userEmail} no valor de R$ ${newOrder.total?.toFixed(2) || (newOrder.price || 0).toFixed(2)}`,
+                  url: '/admin'
+                })
+              }).catch(err => console.error('Push error:', err));
+
               // Auto remove notification after 10 seconds
               setTimeout(() => {
                 setNotifications(prev => prev.filter(n => n.id !== newOrder.id));
@@ -181,6 +230,17 @@ export default function Admin() {
                   message: 'Nova mensagem de suporte'
                 };
                 
+                // Trigger Real Push Notification to Admin
+                fetch('/api/push/notify-admin', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    title: '💬 Nova Mensagem de Suporte',
+                    body: `Mensagem de ${ticket.userEmail}`,
+                    url: '/admin'
+                  })
+                }).catch(err => console.error('Push error:', err));
+
                 return [...prev.filter(n => n.id !== `support-${ticket.id}`), newNotif];
               });
             } else {
@@ -1214,6 +1274,42 @@ export default function Admin() {
                     {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Salvar E-mail'}
                   </button>
                 </form>
+
+                <div className="p-6 rounded-3xl bg-white/5 border border-white/10 space-y-4">
+                  <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400">Notificações Push (Celular)</h3>
+                  <p className="text-xs text-gray-500">Ative as notificações para receber alertas reais de novos pedidos e mensagens de suporte no seu celular.</p>
+                  
+                <div className="flex flex-col gap-3">
+                  {pushPermission === 'denied' && (
+                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-[10px] text-red-400 font-bold">
+                      ⚠️ Permissão de notificação negada. Você precisa resetar as permissões no seu navegador/celular para ativar.
+                    </div>
+                  )}
+                  
+                  <button
+                    onClick={subscribeToPush}
+                    disabled={subscribing || (pushSubscribed && pushPermission === 'granted')}
+                    className={`w-full py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                      pushSubscribed && pushPermission === 'granted'
+                        ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 cursor-default' 
+                        : 'bg-purple-600 hover:bg-purple-500 text-white'
+                    }`}
+                  >
+                    {subscribing ? <Loader2 className="w-4 h-4 animate-spin" /> : (pushSubscribed && pushPermission === 'granted') ? <Check className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+                    {(pushSubscribed && pushPermission === 'granted') ? 'NOTIFICAÇÕES ATIVADAS' : 'ATIVAR NOTIFICAÇÕES NESTE DISPOSITIVO'}
+                  </button>
+                    
+                    {pushSubscribed && (
+                      <button
+                        onClick={handleTestPushNotification}
+                        className="w-full py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 font-bold text-sm transition-all flex items-center justify-center gap-2"
+                      >
+                        <Send className="w-4 h-4" />
+                        TESTAR NOTIFICAÇÃO REAL
+                      </button>
+                    )}
+                  </div>
+                </div>
 
                 <div className="p-6 rounded-3xl bg-white/5 border border-white/10 space-y-4">
                   <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400">Diagnóstico de E-mail</h3>
