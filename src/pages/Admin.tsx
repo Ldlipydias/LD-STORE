@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, setDoc, getDoc, onSnapshot, where, Timestamp } from 'firebase/firestore';
 import { uploadToImgBB } from '../services/imgbb';
-import { Plus, Trash2, Image as ImageIcon, Loader2, Lock, Edit2, X, Sparkles, Check, XCircle, ExternalLink, Bell, MessageSquare, Users, Send, ShoppingBag, Mail, Activity } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, Loader2, Lock, Edit2, X, Sparkles, Check, XCircle, ExternalLink, Bell, MessageSquare, Users, Send, ShoppingBag, Mail, Activity, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Admin() {
@@ -44,7 +44,9 @@ export default function Admin() {
     price: '',
     downloadUrl: '',
     stock: '10',
-    image: null as File | null
+    image: null as File | null,
+    currentImageUrl: '',
+    sampleImages: [] as (File | string)[]
   });
 
   useEffect(() => {
@@ -256,6 +258,16 @@ export default function Admin() {
         imageUrl = await uploadToImgBB(productForm.image);
       }
 
+      const sampleImageUrls: string[] = [];
+      for (const item of productForm.sampleImages) {
+        if (typeof item === 'string') {
+          sampleImageUrls.push(item);
+        } else {
+          const url = await uploadToImgBB(item);
+          sampleImageUrls.push(url);
+        }
+      }
+
       if (editingId) {
         const updateData: any = {
           name: productForm.name,
@@ -263,6 +275,7 @@ export default function Admin() {
           price: parseFloat(productForm.price),
           stock: parseInt(productForm.stock) || 0,
           downloadUrl: productForm.downloadUrl,
+          sampleImages: sampleImageUrls
         };
         if (imageUrl) updateData.imageUrl = imageUrl;
         
@@ -281,10 +294,11 @@ export default function Admin() {
           stock: parseInt(productForm.stock) || 0,
           downloadUrl: productForm.downloadUrl,
           imageUrl,
+          sampleImages: sampleImageUrls,
           createdAt: new Date().toISOString()
         });
       }
-      setProductForm({ name: '', description: '', price: '', downloadUrl: '', stock: '10', image: null });
+      setProductForm({ name: '', description: '', price: '', downloadUrl: '', stock: '10', image: null, currentImageUrl: '', sampleImages: [] });
       fetchData();
     } catch (error: any) {
       console.error(error);
@@ -302,7 +316,9 @@ export default function Admin() {
       price: prod.price.toString(),
       downloadUrl: prod.downloadUrl || '',
       stock: (prod.stock || 0).toString(),
-      image: null
+      image: null,
+      currentImageUrl: prod.imageUrl || '',
+      sampleImages: prod.sampleImages || []
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -336,39 +352,35 @@ export default function Admin() {
   };
 
   const handleApprovePix = async (order: any) => {
-    setConfirmModal({
-      show: true,
-      title: 'Aprovar Pagamento',
-      message: `Deseja aprovar o pagamento de $ ${order.total.toFixed(2)} para o produto ${order.productName}?`,
-      onConfirm: async () => {
-        setLoading(true);
-        try {
-          // 1. Update order status
-          await updateDoc(doc(db, 'orders', order.id), {
-            status: 'paid',
-            approvedAt: new Date().toISOString()
+    if (!confirm(`Deseja aprovar o pagamento de $ ${order.total?.toFixed(2) || (order.price || order.amount || 0).toFixed(2)} para o produto ${order.productName}?`)) return;
+    
+    setLoading(true);
+    try {
+      // 1. Update order status
+      await updateDoc(doc(db, 'orders', order.id), {
+        status: 'paid',
+        approvedAt: new Date().toISOString()
+      });
+
+      // 2. Decrease stock
+      if (order.productId) {
+        const productDoc = await getDoc(doc(db, 'products', order.productId));
+        if (productDoc.exists()) {
+          const currentStock = productDoc.data().stock || 0;
+          await updateDoc(doc(db, 'products', order.productId), {
+            stock: Math.max(0, currentStock - 1)
           });
-
-          // 2. Decrease stock
-          const productDoc = await getDoc(doc(db, 'products', order.productId));
-          if (productDoc.exists()) {
-            const currentStock = productDoc.data().stock || 0;
-            await updateDoc(doc(db, 'products', order.productId), {
-              stock: Math.max(0, currentStock - 1)
-            });
-          }
-
-          alert('Produto liberado com sucesso!');
-          fetchData();
-        } catch (error) {
-          console.error(error);
-          alert('Erro ao liberar produto.');
-        } finally {
-          setLoading(false);
-          setConfirmModal(null);
         }
       }
-    });
+
+      alert('Produto liberado com sucesso!');
+      fetchData();
+    } catch (error: any) {
+      console.error('Erro ao aprovar PIX:', error);
+      alert(`Erro ao liberar produto: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleRejectPix = async () => {
@@ -445,7 +457,9 @@ export default function Admin() {
   };
 
   const handleDeliverProduct = async (product: any) => {
-    if (!selectedTicket || !product) return;
+    if (!selectedTicket) return;
+    if (!product) return;
+    
     setDelivering(true);
     try {
       // 1. Send email with product
@@ -474,14 +488,14 @@ export default function Admin() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao enviar e-mail de entrega');
+        throw new Error(errorData.error || 'Erro ao enviar e-mail');
       }
 
       // 2. Add message to chat
       const newMessage = {
         id: Date.now().toString(),
         sender: 'admin',
-        text: `PRODUTO ENTREGUE VIA E-MAIL: ${product.name}`,
+        text: `PRODUTO ENTREGUE: ${product.name}\nLINK: ${product.downloadUrl}`,
         createdAt: new Date().toISOString()
       };
 
@@ -492,7 +506,7 @@ export default function Admin() {
         unreadByAdmin: 0
       });
 
-      alert('Produto entregue com sucesso via e-mail!');
+      alert('Produto entregue com sucesso!');
       setShowDeliverModal(false);
     } catch (error: any) {
       console.error(error);
@@ -755,45 +769,47 @@ export default function Admin() {
           ))}
         </AnimatePresence>
       </div>
-      <div className="flex items-center justify-between">
-        <h1 className="text-4xl font-black tracking-tighter">PAINEL ADM</h1>
-        <div className="px-4 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-500 text-xs font-bold uppercase tracking-widest">
-          ADMINISTRADOR
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-white/5 pb-12">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20">
+              <ShieldCheck className="w-6 h-6 text-purple-400" />
+            </div>
+            <h1 className="text-5xl font-black tracking-tighter pro-gradient-text">
+              PAINEL <span className="italic font-serif font-light lowercase">adm</span>
+            </h1>
+          </div>
+          <p className="text-gray-500 max-w-md font-medium leading-relaxed">
+            Gerencie seus produtos, pedidos e suporte com ferramentas de alta performance.
+          </p>
         </div>
-      </div>
 
-      {/* Admin Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar border-b border-white/10">
-        {[
-          { id: 'orders', label: 'Pedidos PIX', icon: Bell, count: pendingOrders.length },
-          { id: 'support', label: 'Suporte', icon: MessageSquare, count: supportTickets.filter(t => t.status === 'open').length },
-          { id: 'products', label: 'Produtos', icon: ShoppingBag, count: products.length },
-          { id: 'settings', label: 'Configurações', icon: Sparkles, count: 0 },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-6 py-3 rounded-t-2xl font-bold text-sm transition-all whitespace-nowrap relative ${
-              activeTab === tab.id 
-                ? 'bg-white/10 text-white' 
-                : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-            }`}
-          >
-            <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-purple-500' : ''}`} />
-            {tab.label}
-            {tab.count > 0 && (
-              <span className="px-1.5 py-0.5 rounded-md bg-purple-500 text-black text-[10px] font-black">
-                {tab.count}
-              </span>
-            )}
-            {activeTab === tab.id && (
-              <motion.div 
-                layoutId="activeTab"
-                className="absolute bottom-0 left-0 right-0 h-1 bg-purple-500"
-              />
-            )}
-          </button>
-        ))}
+        <div className="flex flex-wrap items-center gap-2 bg-white/[0.03] p-2 rounded-2xl border border-white/5">
+          {[
+            { id: 'orders', label: 'Pedidos', icon: ShoppingBag, count: pendingOrders.length },
+            { id: 'support', label: 'Suporte', icon: MessageSquare, count: supportTickets.filter(t => t.unreadByAdmin).length },
+            { id: 'products', label: 'Produtos', icon: ImageIcon },
+            { id: 'settings', label: 'Ajustes', icon: Activity }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center gap-3 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${
+                activeTab === tab.id 
+                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' 
+                  : 'text-gray-500 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <tab.icon className="w-4 h-4" />
+              {tab.label}
+              {tab.count !== undefined && tab.count > 0 && (
+                <span className="ml-1 px-2 py-0.5 rounded-full bg-white text-black text-[8px]">
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-12">
@@ -1224,9 +1240,17 @@ export default function Admin() {
                 placeholder="Link de Download ou Acesso (Mega, Drive, Link, etc.)"
                 className="w-full px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none"
               />
-              <label className="flex flex-col items-center justify-center w-full h-32 rounded-xl border-2 border-dashed border-white/10 hover:border-purple-500/50 cursor-pointer transition-colors group">
+              <label className="flex flex-col items-center justify-center w-full h-32 rounded-xl border-2 border-dashed border-white/10 hover:border-purple-500/50 cursor-pointer transition-colors group overflow-hidden relative">
                 {productForm.image ? (
-                  <span className="text-purple-400 text-sm font-medium">{productForm.image.name}</span>
+                  <span className="text-purple-400 text-sm font-medium z-10 bg-black/50 px-2 py-1 rounded">{productForm.image.name}</span>
+                ) : productForm.currentImageUrl ? (
+                  <div className="absolute inset-0 w-full h-full">
+                    <img src={productForm.currentImageUrl} alt="Current" className="w-full h-full object-cover opacity-50" />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white">
+                      <ImageIcon className="w-8 h-8" />
+                      <span className="text-xs font-bold uppercase tracking-widest">Alterar Capa</span>
+                    </div>
+                  </div>
                 ) : (
                   <>
                     <ImageIcon className="w-8 h-8 text-gray-500 group-hover:text-purple-400 transition-colors" />
@@ -1240,6 +1264,47 @@ export default function Admin() {
                   className="hidden"
                 />
               </label>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Imagens de Amostra (Opcional)</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {productForm.sampleImages.map((img, idx) => (
+                    <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-white/10 group">
+                      <img 
+                        src={typeof img === 'string' ? img : URL.createObjectURL(img)} 
+                        alt={`Sample ${idx}`} 
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setProductForm({
+                          ...productForm,
+                          sampleImages: productForm.sampleImages.filter((_, i) => i !== idx)
+                        })}
+                        className="absolute inset-0 bg-red-500/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                      >
+                        <Trash2 className="w-4 h-4 text-white" />
+                      </button>
+                    </div>
+                  ))}
+                  <label className="aspect-square rounded-lg border-2 border-dashed border-white/10 hover:border-purple-500/50 cursor-pointer flex items-center justify-center transition-colors">
+                    <Plus className="w-5 h-5 text-gray-500" />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        setProductForm({
+                          ...productForm,
+                          sampleImages: [...productForm.sampleImages, ...files]
+                        });
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
               <button
                 type="submit"
                 disabled={loading}

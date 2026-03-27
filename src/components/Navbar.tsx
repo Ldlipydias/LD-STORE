@@ -1,7 +1,8 @@
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { User } from 'firebase/auth';
 import { logout } from '../firebase';
-import { LogOut, Store, LayoutDashboard, BadgeCheck } from 'lucide-react';
+import { LogOut, Store, LayoutDashboard, BadgeCheck, Download } from 'lucide-react';
 import metadata from '../../metadata.json';
 
 interface NavbarProps {
@@ -11,6 +12,32 @@ interface NavbarProps {
 
 export default function Navbar({ user, isAdmin }: NavbarProps) {
   const navigate = useNavigate();
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBtn, setShowInstallBtn] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallBtn(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setShowInstallBtn(false);
+    }
+    setDeferredPrompt(null);
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -18,38 +45,65 @@ export default function Navbar({ user, isAdmin }: NavbarProps) {
   };
 
   return (
-    <nav className="border-b border-white/10 bg-black/50 backdrop-blur-md sticky top-0 z-50">
-      <div className="container mx-auto px-4 h-24 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 group">
-          <img 
-            src="https://i.ibb.co/gLNrfByH/Chat-GPT-Image-20-de-mar-de-2026-23-30-58.png" 
-            alt={metadata.name} 
-            className="h-20 w-auto object-contain group-hover:scale-105 transition-transform duration-300"
-            referrerPolicy="no-referrer"
-          />
+    <nav className="border-b border-white/5 bg-black/40 backdrop-blur-2xl sticky top-0 z-50">
+      <div className="container mx-auto px-6 h-20 flex items-center justify-between">
+        <Link to="/" className="flex items-center gap-3 group">
+          <div className="relative">
+            <div className="absolute inset-0 bg-purple-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <img 
+              src="https://i.ibb.co/rKSwsh4q/Chat-GPT-Image-26-de-mar-de-2026-23-36-08.png" 
+              alt={metadata.name} 
+              className="h-12 w-auto object-contain relative z-10 group-hover:scale-110 transition-transform duration-700"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+          <div className="hidden sm:block">
+            <span className="text-2xl font-black tracking-tighter text-white/90 group-hover:text-white transition-colors lowercase">
+              {metadata.name}
+            </span>
+          </div>
         </Link>
 
-        <div className="flex items-center gap-6">
-          {user && (
+        <div className="flex items-center gap-8">
+          {showInstallBtn && (
+            <button
+              onClick={handleInstallClick}
+              className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600/10 border border-purple-500/20 text-purple-400 text-[10px] font-black uppercase tracking-widest hover:bg-purple-600/20 transition-all"
+            >
+              <Download className="w-4 h-4" />
+              INSTALAR APP
+            </button>
+          )}
+
+          {user ? (
             <>
-              <Link to="/store" className="flex items-center gap-2 text-xs font-black uppercase tracking-widest hover:text-purple-400 transition-colors">
-                <Store className="w-4 h-4" />
-                Loja
-              </Link>
-              {isAdmin && (
-                <Link to="/admin" className="flex items-center gap-2 text-xs font-black uppercase tracking-widest hover:text-purple-400 transition-colors">
-                  <LayoutDashboard className="w-4 h-4" />
-                  Painel ADM
+              <div className="hidden md:flex items-center gap-8">
+                <Link to="/store" className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/60 hover:text-white transition-all hover:translate-y-[-1px]">
+                  <Store className="w-4 h-4 text-purple-400" />
+                  CATÁLOGO
                 </Link>
-              )}
+                {isAdmin && (
+                  <Link to="/admin" className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/60 hover:text-white transition-all hover:translate-y-[-1px]">
+                    <LayoutDashboard className="w-4 h-4 text-purple-400" />
+                    ADMINISTRAÇÃO
+                  </Link>
+                )}
+              </div>
+              
+              <div className="h-8 w-px bg-white/10 hidden md:block" />
+
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-white/60 hover:text-white transition-colors"
+                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-red-400/60 hover:text-red-400 transition-all group"
               >
-                <LogOut className="w-4 h-4" />
-                Sair
+                <LogOut className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                SAIR
               </button>
             </>
+          ) : (
+            <Link to="/" className="pro-button pro-button-primary py-2 px-6 text-[10px]">
+              ENTRAR
+            </Link>
           )}
         </div>
       </div>

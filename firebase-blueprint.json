@@ -9,6 +9,11 @@
         "description": { "type": "string", "description": "Product description" },
         "price": { "type": "number", "description": "Product price" },
         "imageUrl": { "type": "string", "description": "Product image URL (ImgBB)" },
+        "sampleImages": { 
+          "type": "array", 
+          "items": { "type": "string" },
+          "description": "List of sample image URLs"
+        },
         "stripePriceId": { "type": "string", "description": "Stripe Price ID" },
         "downloadUrl": { "type": "string", "description": "Download link after purchase" }
       },

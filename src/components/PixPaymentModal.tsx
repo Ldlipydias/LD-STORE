@@ -56,6 +56,37 @@ export default function PixPaymentModal({ isOpen, onClose, product, userId, user
         receiptUrl,
         createdAt: new Date().toISOString()
       });
+
+      // Notificar administrador por e-mail
+      try {
+        await fetch('/api/send-support-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: 'LD STORE Admin', // O servidor usará o SMTP_USER se o 'to' não for um e-mail válido ou se preferir enviar para si mesmo
+            subject: `Novo Comprovante PIX - ${product.name}`,
+            text: `Um novo comprovante de pagamento PIX foi enviado.\n\nProduto: ${product.name}\nValor: $${product.price.toFixed(2)}\nUsuário: ${userEmail || 'Anônimo'}\nLink do Comprovante: ${receiptUrl}`,
+            html: `
+              <div style="font-family: sans-serif; padding: 20px; background: #f4f4f4;">
+                <div style="max-width: 600px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 10px;">
+                  <h2 style="color: #7c3aed;">Novo Pagamento PIX Recebido</h2>
+                  <p>Um novo comprovante foi enviado para conferência.</p>
+                  <hr style="border: 0; border-top: 1px solid #eee;" />
+                  <p><strong>Produto:</strong> ${product.name}</p>
+                  <p><strong>Valor:</strong> $${product.price.toFixed(2)}</p>
+                  <p><strong>Usuário:</strong> ${userEmail || 'Anônimo'}</p>
+                  <p><strong>ID do Usuário:</strong> ${userId}</p>
+                  <div style="margin-top: 20px;">
+                    <a href="${receiptUrl}" style="background: #7c3aed; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Ver Comprovante</a>
+                  </div>
+                </div>
+              </div>
+            `
+          })
+        });
+      } catch (emailError) {
+        console.warn('Erro ao enviar notificação por e-mail:', emailError);
+      }
       
       alert('Comprovante enviado com sucesso! O administrador irá conferir o seu pagamento e liberar o produto em breve.');
       onSuccess();

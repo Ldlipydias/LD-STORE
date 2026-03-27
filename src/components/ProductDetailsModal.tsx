@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, ShoppingBag, Plus, CheckCircle2, Zap, MessageSquare, Package, ShieldCheck } from 'lucide-react';
 
@@ -12,8 +12,16 @@ interface ProductDetailsModalProps {
 
 export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, onPix }: ProductDetailsModalProps) {
   const [selectedOption, setSelectedOption] = useState(0);
+  const [currentImage, setCurrentImage] = useState(product?.imageUrl);
+
+  // Reset current image when product changes or modal opens
+  useEffect(() => {
+    if (product) setCurrentImage(product.imageUrl);
+  }, [product, isOpen]);
 
   if (!product) return null;
+
+  const allImages = [product.imageUrl, ...(product.sampleImages || [])];
 
   return (
     <AnimatePresence>
@@ -33,13 +41,31 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, o
               <X className="w-5 h-5 text-white" />
             </button>
 
-            {/* Product Image */}
-            <div className="aspect-video w-full overflow-hidden bg-black/40 p-4">
-              <img 
-                src={product.imageUrl} 
-                alt={product.name}
-                className="w-full h-full object-contain rounded-2xl"
-              />
+            {/* Product Image & Gallery */}
+            <div className="space-y-4 p-4">
+              <div className="aspect-video w-full overflow-hidden bg-black/40 rounded-2xl">
+                <img 
+                  src={currentImage || product.imageUrl} 
+                  alt={product.name}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              
+              {allImages.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                  {allImages.map((img, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentImage(img)}
+                      className={`relative w-20 aspect-square rounded-xl overflow-hidden border-2 shrink-0 transition-all ${
+                        currentImage === img ? 'border-purple-500 scale-95' : 'border-white/10 hover:border-white/20'
+                      }`}
+                    >
+                      <img src={img} alt={`Thumb ${idx}`} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="p-8 space-y-8">

@@ -1,9 +1,10 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&display=swap');
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Space Grotesk", sans-serif;
+  --font-serif: "Cormorant Garamond", serif;
 }
 
 @keyframes blink {
@@ -48,15 +49,16 @@
 
 @layer base {
   body {
-    @apply bg-black text-white antialiased;
+    @apply bg-[#050505] text-white antialiased;
     background-image: 
-      radial-gradient(circle at 50% 50%, rgba(139, 92, 246, 0.05) 0%, transparent 90%),
-      url("data:image/svg+xml,%3Csvg width='24' height='41.56' viewBox='0 0 24 41.56' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 0l12 6.928v13.856L12 27.712 0 20.784V6.928L12 0z' fill='none' stroke='rgba(255,255,255,0.04)' stroke-width='0.5'/%3E%3C/svg%3E");
+      radial-gradient(circle at 50% -20%, rgba(139, 92, 246, 0.15) 0%, transparent 70%),
+      radial-gradient(circle at 0% 100%, rgba(139, 92, 246, 0.05) 0%, transparent 50%),
+      radial-gradient(circle at 100% 100%, rgba(139, 92, 246, 0.05) 0%, transparent 50%);
     background-attachment: fixed;
   }
   
   h1, h2, h3, h4, h5, h6 {
-    @apply font-display;
+    @apply font-display tracking-tighter;
   }
 }
 
@@ -68,11 +70,31 @@
   scrollbar-width: none;
 }
 
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
 
-.animate-shimmer {
-  animation: shimmer 2s infinite;
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
+.glass-card {
+  @apply bg-white/[0.03] backdrop-blur-2xl border border-white/10 rounded-[2.5rem];
+}
+
+.pro-gradient-text {
+  @apply bg-gradient-to-b from-white via-white to-white/40 bg-clip-text text-transparent;
+}
+
+.pro-button {
+  @apply relative overflow-hidden px-8 py-4 rounded-full font-bold transition-all duration-500 hover:scale-[1.02] active:scale-95;
+}
+
+.pro-button-primary {
+  @apply bg-white text-black shadow-[0_0_40px_rgba(255,255,255,0.15)] hover:shadow-[0_0_60px_rgba(255,255,255,0.25)];
+}
+
+.pro-button-secondary {
+  @apply bg-white/5 border border-white/10 text-white hover:bg-white/10;
 }

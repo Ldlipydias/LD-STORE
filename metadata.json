@@ -1,5 +1,5 @@
 {
-  "name": "LD STORE",
-  "description": "Premium App Store with Admin Dashboard, ImgBB hosting, and Stripe payments.",
+  "name": "ld store",
+  "description": "Sua loja definitiva de produtos digitais: scripts, aplicativos, ferramentas e muito mais.",
   "requestFramePermissions": ["notifications"]
 }

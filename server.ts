@@ -1,6 +1,6 @@
 import express from 'express';
 import path from 'path';
-import app from './src/app';
+import app from './src/app.ts';
 
 async function startServer() {
   const PORT = 3000;

@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { loginWithGoogle } from '../firebase';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ShoppingBag, ShieldCheck, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ShoppingBag, ShieldCheck, Sparkles, CheckCircle2, Loader2 } from 'lucide-react';
 import metadata from '../../metadata.json';
 
 interface HomeProps {
@@ -16,6 +16,14 @@ export default function Home({ user, isAdmin }: HomeProps) {
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Auto-dismiss error after 8 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   const handleLogin = async () => {
     if (loading) return;
@@ -31,11 +39,15 @@ export default function Home({ user, isAdmin }: HomeProps) {
       // Handle specific Firebase Auth errors
       if (err.code === 'auth/unauthorized-domain') {
         setError('Este domínio não está autorizado no Firebase. Adicione a URL atual nos "Domínios Autorizados" do Firebase Console.');
-      } else if (err.code === 'auth/popup-closed-by-user') {
-        // User closed the popup, usually no need to show a big error message
-        console.log('User closed the login popup');
+      } else if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/popup-blocked') {
+        setError('O login foi interrompido. Verifique se o seu navegador não bloqueou o pop-up de login e tente novamente.');
+        console.log('Login popup closed or blocked');
       } else if (err.code === 'auth/cancelled-popup-request') {
         setError('Uma solicitação de login já está em andamento. Por favor, aguarde.');
+      } else if (err.code === 'auth/operation-not-allowed') {
+        setError('O login com Google não está habilitado no Firebase Console. Ative-o em Authentication > Sign-in method.');
+      } else if (err.code === 'auth/internal-error') {
+        setError('Ocorreu um erro interno no Firebase. Verifique se as configurações do seu projeto estão corretas.');
       } else if (err.message?.includes('INTERNAL ASSERTION FAILED')) {
         setError('Ocorreu um erro interno no Firebase Auth. Por favor, tente recarregar a página.');
       } else {
@@ -47,113 +59,152 @@ export default function Home({ user, isAdmin }: HomeProps) {
   };
 
   return (
-    <div className="relative flex flex-col items-center justify-center min-h-[80vh] text-center space-y-12 overflow-hidden">
-      {/* Animated Glows */}
+    <div className="relative flex flex-col items-center justify-center min-h-[90vh] text-center space-y-16 overflow-hidden py-20">
+      {/* Background Elements */}
       <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-[120px] animate-pulse delay-700" />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black" />
+        <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-purple-600/10 rounded-full blur-[150px] opacity-50" />
+        <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-black to-transparent" />
+        
+        {/* Floating Particles/Glows */}
+        <motion.div 
+          animate={{ 
+            y: [0, -20, 0],
+            opacity: [0.3, 0.6, 0.3]
+          }}
+          transition={{ duration: 5, repeat: Infinity }}
+          className="absolute top-1/4 left-1/4 w-2 h-2 bg-purple-500 rounded-full blur-sm"
+        />
+        <motion.div 
+          animate={{ 
+            y: [0, 20, 0],
+            opacity: [0.2, 0.5, 0.2]
+          }}
+          transition={{ duration: 7, repeat: Infinity, delay: 1 }}
+          className="absolute top-1/3 right-1/4 w-3 h-3 bg-blue-500 rounded-full blur-sm"
+        />
       </div>
 
       {error && (
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="fixed top-24 left-1/2 -translate-x-1/2 z-50 p-4 rounded-2xl bg-red-500/20 border border-red-500/50 text-red-200 text-sm max-w-md backdrop-blur-xl"
+          className="fixed top-24 left-1/2 -translate-x-1/2 z-50 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-200 text-xs font-bold uppercase tracking-widest backdrop-blur-xl"
         >
           {error}
         </motion.div>
       )}
+
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="space-y-8 flex flex-col items-center"
+        transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+        className="space-y-12 flex flex-col items-center max-w-5xl"
       >
         <div className="relative group">
-          <div className="absolute inset-0 bg-purple-500/30 blur-[40px] rounded-full group-hover:bg-purple-500/50 transition-colors duration-500" />
+          <div className="absolute inset-0 bg-purple-500/20 blur-[80px] rounded-full group-hover:bg-purple-500/40 transition-all duration-1000" />
           <img 
             src="https://i.ibb.co/gLNrfByH/Chat-GPT-Image-20-de-mar-de-2026-23-30-58.png" 
             alt={metadata.name} 
-            className="h-48 md:h-72 w-auto object-contain relative z-10 drop-shadow-[0_0_30px_rgba(147,51,234,0.4)]"
+            className="h-64 md:h-96 w-auto object-contain relative z-10 drop-shadow-[0_0_60px_rgba(147,51,234,0.4)] hover:scale-105 transition-transform duration-1000"
             referrerPolicy="no-referrer"
           />
         </div>
         
-        <h1 className="text-6xl md:text-8xl font-black tracking-tighter leading-none">
-          A MELHOR LOJA DE <br />
-          <span className="bg-gradient-to-r from-purple-500 via-white to-purple-500 bg-clip-text text-transparent">
-            APPS PREMIUM
-          </span>
-        </h1>
-        
-        <p className="max-w-2xl mx-auto text-gray-400 text-lg md:text-xl font-light">
-          {metadata.description}
-        </p>
+        <div className="space-y-8">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
+            <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/60">Sua Loja Digital Definitiva</span>
+          </div>
+
+          <h1 className="text-7xl md:text-[10rem] font-black tracking-tighter leading-[0.8] pro-gradient-text">
+            O MELHOR DO <br />
+            <span className="italic font-serif font-light lowercase text-purple-400">digital</span>
+          </h1>
+          
+          <p className="max-w-2xl mx-auto text-gray-400 text-lg md:text-2xl font-medium tracking-tight leading-relaxed opacity-80">
+            Descubra uma curadoria exclusiva de ferramentas, scripts e aplicativos premium para elevar seu nível.
+          </p>
+        </div>
       </motion.div>
 
       <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.3, duration: 0.5 }}
-        className="flex flex-col sm:flex-row gap-4"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.8, duration: 0.8 }}
+        className="flex flex-col sm:flex-row gap-6"
       >
         {!user ? (
           <button
             onClick={handleLogin}
             disabled={loading}
-            className="group relative px-12 py-4 rounded-2xl bg-white text-black font-black text-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-3 shadow-[0_0_40px_rgba(255,255,255,0.2)] overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
+            className="pro-button pro-button-primary flex items-center gap-4 px-12 py-5 text-xl disabled:opacity-50 group"
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-black/5 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] pointer-events-none" />
-            <span className="relative z-10">
-              {loading ? 'Entrando...' : 'Entrar com Google'}
-            </span>
             {loading ? (
-              <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+              <Loader2 className="w-6 h-6 animate-spin" />
             ) : (
-              <ShoppingBag className="w-5 h-5 relative z-10" />
+              <>
+                <span>Explorar Agora</span>
+                <ShoppingBag className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+              </>
             )}
           </button>
         ) : (
           <div className="flex flex-col sm:flex-row gap-6">
             <button
               onClick={() => navigate('/store')}
-              className="group relative px-12 py-4 rounded-2xl bg-gradient-to-r from-purple-600 via-purple-400 to-purple-600 bg-[length:200%_auto] text-white font-black text-lg hover:bg-[100%_center] transition-all transform hover:scale-105 active:scale-95 flex items-center gap-3 shadow-[0_0_40px_rgba(147,51,234,0.4)] overflow-hidden"
+              className="pro-button pro-button-primary flex items-center gap-4 px-12 py-5 text-xl group"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] pointer-events-none" />
-              <span className="relative z-10">Ir para a Loja</span>
-              <ShoppingBag className="w-5 h-5 relative z-10" />
+              <span>Acessar Catálogo</span>
+              <ShoppingBag className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
             </button>
             {isAdmin && (
               <button
                 onClick={() => navigate('/admin')}
-                className="group relative px-12 py-4 rounded-2xl bg-white text-black font-black text-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-3 shadow-[0_0_40px_rgba(255,255,255,0.2)] overflow-hidden"
+                className="pro-button pro-button-secondary flex items-center gap-4 px-12 py-5 text-xl"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-black/5 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] pointer-events-none" />
-                <span className="relative z-10">Painel Administrativo</span>
-                <ShieldCheck className="w-5 h-5 relative z-10" />
+                <span>Painel Gestor</span>
+                <ShieldCheck className="w-6 h-6" />
               </button>
             )}
           </div>
         )}
       </motion.div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-5xl pt-12">
+      <div className="w-full overflow-hidden py-12 border-y border-white/5 bg-white/[0.01]">
+        <div className="flex gap-24 animate-marquee whitespace-nowrap px-12 w-max">
+          {[
+            "ENTREGA IMEDIATA", "SUPORTE 24/7", "PAGAMENTO SEGURO", 
+            "PRODUTOS VERIFICADOS", "ATUALIZAÇÕES VITALÍCIAS",
+            "ENTREGA IMEDIATA", "SUPORTE 24/7", "PAGAMENTO SEGURO",
+            "PRODUTOS VERIFICADOS", "ATUALIZAÇÕES VITALÍCIAS"
+          ].map((text, i) => (
+            <span key={i} className="text-[10px] font-black uppercase tracking-[0.5em] text-white/20">
+              {text}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-16 w-full max-w-6xl pt-12">
         {[
-          { icon: ShieldCheck, title: "Seguro", desc: "Pagamentos via Stripe" },
-          { icon: CheckCircle2, title: "Verificado", desc: "Produtos de qualidade" },
-          { icon: Sparkles, title: "Premium", desc: "Conteúdo exclusivo" }
+          { icon: ShieldCheck, title: "Segurança Total", desc: "Transações protegidas e criptografadas de ponta a ponta." },
+          { icon: CheckCircle2, title: "Qualidade Garantida", desc: "Cada produto passa por uma análise técnica rigorosa." },
+          { icon: Sparkles, title: "Novidades Diárias", desc: "Sempre à frente com os lançamentos mais quentes do mercado." }
         ].map((feature, i) => (
           <motion.div
             key={i}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 + i * 0.1 }}
-            className="p-6 rounded-3xl bg-white/5 border border-white/10 flex flex-col items-center gap-3"
+            transition={{ delay: 1 + i * 0.1 }}
+            className="flex flex-col items-center gap-6 group"
           >
-            <feature.icon className="w-8 h-8 text-purple-400" />
-            <h3 className="font-bold text-lg">{feature.title}</h3>
-            <p className="text-gray-500 text-sm">{feature.desc}</p>
+            <div className="w-20 h-20 rounded-[2rem] bg-white/[0.02] border border-white/5 flex items-center justify-center group-hover:bg-purple-500/10 group-hover:border-purple-500/20 transition-all duration-700 group-hover:rotate-6">
+              <feature.icon className="w-10 h-10 text-purple-400" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="font-bold text-xl uppercase tracking-tighter text-white/90">{feature.title}</h3>
+              <p className="text-gray-500 text-sm font-medium leading-relaxed max-w-[250px] mx-auto">{feature.desc}</p>
+            </div>
           </motion.div>
         ))}
       </div>

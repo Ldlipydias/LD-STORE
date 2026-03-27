@@ -99,7 +99,10 @@ app.get('/api/test-email-config', async (req, res) => {
 app.post('/api/send-support-email', async (req, res) => {
   try {
     const { to, subject, text, html, replyTo } = req.body;
-    console.log('Attempting to send email to:', to);
+    const adminEmail = process.env.SMTP_USER;
+    const recipient = (to && to.includes('@')) ? to : adminEmail;
+
+    console.log('Attempting to send email to:', recipient);
 
     const mailTransporter = getTransporter();
     if (!mailTransporter) {
@@ -113,7 +116,7 @@ app.post('/api/send-support-email', async (req, res) => {
 
     const mailOptions = {
       from: `"${process.env.SMTP_FROM_NAME || 'LD STORE'}" <${process.env.SMTP_USER}>`,
-      to,
+      to: recipient,
       subject,
       text,
       html,

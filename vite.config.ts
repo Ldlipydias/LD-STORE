@@ -2,12 +2,46 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(), 
+      tailwindcss(),
+      VitePWA({
+        registerType: 'autoUpdate',
+        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+        manifest: {
+          name: 'LD STORE',
+          short_name: 'LD Store',
+          description: 'Premium App Store with Admin Dashboard',
+          theme_color: '#050505',
+          background_color: '#050505',
+          display: 'standalone',
+          icons: [
+            {
+              src: 'https://i.ibb.co/rKSwsh4q/Chat-GPT-Image-26-de-mar-de-2026-23-36-08.png',
+              sizes: '192x192',
+              type: 'image/png'
+            },
+            {
+              src: 'https://i.ibb.co/rKSwsh4q/Chat-GPT-Image-26-de-mar-de-2026-23-36-08.png',
+              sizes: '512x512',
+              type: 'image/png'
+            },
+            {
+              src: 'https://i.ibb.co/rKSwsh4q/Chat-GPT-Image-26-de-mar-de-2026-23-36-08.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any maskable'
+            }
+          ]
+        }
+      })
+    ],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || ''),
       'import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY': JSON.stringify(process.env.VITE_STRIPE_PUBLISHABLE_KEY || env.VITE_STRIPE_PUBLISHABLE_KEY || ''),
@@ -27,7 +61,7 @@ export default defineConfig(({mode}) => {
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      // Do not modifyâ€”file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
     },
   };

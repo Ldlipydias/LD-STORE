@@ -142,33 +142,45 @@ export default function Store({ user }: StoreProps) {
   }
 
   return (
-    <div className="space-y-12 pb-20">
+    <div className="space-y-16 pb-32">
       <AnimatePresence>
         {error && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed top-20 right-4 z-50 bg-red-500 text-white px-6 py-3 rounded-lg shadow-xl font-bold flex items-center gap-2"
+            className="fixed top-24 right-6 z-50 bg-red-500/10 border border-red-500/20 backdrop-blur-xl text-red-200 px-6 py-4 rounded-2xl shadow-2xl font-bold flex items-center gap-3"
           >
-            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-            {error}
-            <button onClick={() => setError(null)} className="ml-4 hover:opacity-70">×</button>
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+            <span className="text-xs uppercase tracking-widest">{error}</span>
+            <button onClick={() => setError(null)} className="ml-4 hover:opacity-70 text-lg">×</button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <h1 className="text-4xl font-black tracking-tighter flex items-center gap-3">
-            LOJA PREMIUM
-            <Sparkles className="w-8 h-8 text-amber-400" />
-          </h1>
-          <p className="text-gray-400">Explore nossa coleção de aplicativos exclusivos.</p>
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-white/5 pb-12">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20">
+              <Sparkles className="w-6 h-6 text-purple-400" />
+            </div>
+            <h1 className="text-5xl font-black tracking-tighter pro-gradient-text">
+              NOSSO <span className="italic font-serif font-light lowercase">catálogo</span>
+            </h1>
+          </div>
+          <p className="text-gray-500 max-w-md font-medium leading-relaxed">
+            Explore nossa seleção exclusiva de ferramentas e aplicativos de alta performance.
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-4 bg-white/[0.03] p-2 rounded-2xl border border-white/5">
+          <div className="px-4 py-2 rounded-xl bg-white/5 text-white text-[10px] font-black uppercase tracking-widest">
+            {products.length} PRODUTOS
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8">
         {products.map((prod) => {
           const isPurchased = userOrders.includes(prod.id);
           const isPending = userPendingOrders.includes(prod.id);
@@ -177,90 +189,90 @@ export default function Store({ user }: StoreProps) {
           return (
             <motion.div
               key={prod.id}
-              whileHover={{ scale: 1.02 }}
-              className="group relative flex flex-col rounded-[2.5rem] bg-white/5 backdrop-blur-xl border border-white/10 overflow-hidden hover:border-purple-500/50 transition-all duration-300 shadow-2xl"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              whileHover={{ y: -8 }}
+              className="group glass-card flex flex-col rounded-[2.5rem] overflow-hidden hover:border-purple-500/30 transition-all duration-500"
             >
-              {/* Image Container - 16:9 and not cropped */}
-              <div className="relative aspect-video overflow-hidden p-2 pb-0">
+              {/* Image Container */}
+              <div className="relative aspect-[4/3] overflow-hidden p-3">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-10" />
                 <img
                   src={prod.imageUrl}
                   alt={prod.name}
-                  className="w-full h-full object-contain rounded-[1.8rem] bg-black/40 group-hover:scale-105 transition-transform duration-500"
+                  className="w-full h-full object-cover rounded-[1.8rem] bg-black/40 group-hover:scale-110 transition-transform duration-700"
                 />
                 
-                {isPurchased && (
-                  <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest shadow-lg z-10">
-                    ADQUIRIDO
-                  </div>
-                )}
+                <div className="absolute top-6 right-6 flex flex-col gap-2 z-20">
+                  {isPurchased && (
+                    <div className="px-4 py-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest shadow-2xl backdrop-blur-md">
+                      ADQUIRIDO
+                    </div>
+                  )}
 
-                {isPending && !isPurchased && (
-                  <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-amber-500 text-black text-[10px] font-black uppercase tracking-widest shadow-lg z-10 flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    EM ANÁLISE
-                  </div>
-                )}
+                  {isPending && !isPurchased && (
+                    <div className="px-4 py-1.5 rounded-full bg-amber-500 text-black text-[10px] font-black uppercase tracking-widest shadow-2xl backdrop-blur-md flex items-center gap-2">
+                      <Clock className="w-3 h-3" />
+                      PENDENTE
+                    </div>
+                  )}
+                </div>
 
                 {isOutOfStock && !isPurchased && !isPending && (
-                  <div className="absolute inset-2 bg-black/60 backdrop-blur-sm flex items-center justify-center z-10 rounded-[1.8rem]">
-                    <div className="w-full bg-white/10 backdrop-blur-md py-2 flex items-center justify-center border-y border-white/20">
-                      <span className="text-white text-[10px] font-black uppercase tracking-[0.3em] animate-flash">
-                        ESGOTADO
-                      </span>
-                    </div>
+                  <div className="absolute inset-3 bg-black/60 backdrop-blur-sm flex items-center justify-center z-20 rounded-[1.8rem]">
+                    <span className="text-white text-[10px] font-black uppercase tracking-[0.4em] px-6 py-2 border border-white/20 rounded-full bg-white/5">
+                      ESGOTADO
+                    </span>
                   </div>
                 )}
               </div>
 
-              <div className="p-5 pt-3 space-y-3 text-center">
-                <div className="space-y-1">
-                  <h3 className="text-sm font-black tracking-tight text-white uppercase flex items-center justify-center gap-2">
-                    🎁 {prod.name}
+              <div className="p-4 md:p-8 pt-2 md:pt-4 space-y-4 md:space-y-6">
+                <div className="space-y-2">
+                  <h3 className="text-sm md:text-xl font-black tracking-tight text-white/90 group-hover:text-purple-400 transition-colors duration-300 line-clamp-1">
+                    {prod.name}
                   </h3>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-2xl font-black text-white tracking-tighter">
-                    $ {prod.price.toFixed(2)}
-                  </div>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">À vista no Pix</p>
-                </div>
-
-                <div className="flex justify-center">
-                  <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20">
-                    <QrCode className="w-5 h-5 text-purple-400" />
+                  <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
+                    <span className="text-lg md:text-2xl font-black text-white tracking-tighter">
+                      R$ {prod.price.toFixed(2)}
+                    </span>
+                    <span className="text-[8px] md:text-[10px] text-gray-500 font-bold uppercase tracking-widest md:border-l md:border-white/10 md:pl-3">
+                      Pix ou Cartão
+                    </span>
                   </div>
                 </div>
 
-                {isPurchased ? (
-                  <div className="flex gap-2">
+                <div className="flex items-center gap-4">
+                  {isPurchased ? (
                     <a
                       href={prod.downloadUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-1 py-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-black hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2 uppercase tracking-widest"
+                      className="flex-1 py-3 md:py-4 rounded-xl md:rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[8px] md:text-[10px] font-black hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2 md:gap-3 uppercase tracking-widest"
                     >
-                      <Download className="w-4 h-4" />
-                      BAIXAR
+                      <Download className="w-3 h-3 md:w-4 md:h-4" />
+                      DOWNLOAD
                     </a>
-                  </div>
-                ) : isPending ? (
-                  <div className="py-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10px] font-black text-center uppercase tracking-widest">
-                    Em Análise
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setSelectedProductDetails(prod)}
-                    disabled={isOutOfStock}
-                    className={`w-full py-4 rounded-2xl font-black text-[10px] transition-all flex items-center justify-center gap-2 shadow-xl uppercase tracking-[0.15em] ${
-                      isOutOfStock 
-                        ? 'bg-white/5 text-gray-500 cursor-not-allowed' 
-                        : 'bg-gradient-to-r from-purple-600 to-purple-400 text-white hover:scale-[1.02] active:scale-95 shadow-purple-600/20'
-                    }`}
-                  >
-                    COMPRAR AGORA
-                  </button>
-                )}
+                  ) : isPending ? (
+                    <div className="flex-1 py-3 md:py-4 rounded-xl md:rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[8px] md:text-[10px] font-black text-center uppercase tracking-widest leading-tight">
+                      <span className="md:hidden">Aguardando</span>
+                      <span className="hidden md:block">Aguardando Aprovação</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setSelectedProductDetails(prod)}
+                      disabled={isOutOfStock}
+                      className={`flex-1 py-3 md:py-4 rounded-xl md:rounded-2xl font-black text-[8px] md:text-[10px] transition-all flex items-center justify-center gap-2 md:gap-3 uppercase tracking-[0.1em] md:tracking-[0.2em] ${
+                        isOutOfStock 
+                          ? 'bg-white/5 text-gray-600 cursor-not-allowed' 
+                          : 'pro-button pro-button-primary shadow-purple-600/20'
+                      }`}
+                    >
+                      DETALHES
+                      <ExternalLink className="w-3 h-3 md:w-4 md:h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
             </motion.div>
           );
