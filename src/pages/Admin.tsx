@@ -68,7 +68,22 @@ export default function Admin() {
       
       // Get VAPID public key from server
       const response = await fetch('/api/push/vapid-public-key');
-      const { publicKey } = await response.json();
+      const contentType = response.headers.get('content-type');
+      
+      let publicKey;
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        if (data.error) throw new Error(data.error);
+        publicKey = data.publicKey;
+      } else {
+        const text = await response.text();
+        console.error('VAPID Key Non-JSON Response:', text);
+        throw new Error(`Erro ao buscar chave VAPID (Status: ${response.status}).`);
+      }
+
+      if (!publicKey) {
+        throw new Error('Chave VAPID pública não encontrada no servidor.');
+      }
 
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
@@ -105,11 +120,19 @@ export default function Admin() {
           url: '/admin'
         })
       });
-      const data = await response.json();
-      if (data.success) {
-        alert(`Notificação enviada com sucesso para ${data.sentCount} dispositivo(s)!`);
+      
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        if (data.success) {
+          alert(`Notificação enviada com sucesso para ${data.sentCount} dispositivo(s)!`);
+        } else {
+          alert('Erro ao enviar notificação: ' + (data.error || 'Erro desconhecido'));
+        }
       } else {
-        alert('Erro ao enviar notificação. Verifique se você ativou as notificações neste dispositivo.');
+        const text = await response.text();
+        console.error('Push Notification Non-JSON Response:', text);
+        alert(`Erro: Resposta do servidor não é JSON (Status: ${response.status}).`);
       }
     } catch (error: any) {
       alert('Erro: ' + error.message);
@@ -316,11 +339,22 @@ export default function Admin() {
   const handleTestApiHealth = async () => {
     try {
       const response = await fetch('/api/health');
-      const data = await response.json();
-      setTestEmailResult({
-        success: true,
-        message: `API Health: ${data.status} às ${new Date(data.timestamp).toLocaleString()}`
-      });
+      const contentType = response.headers.get('content-type');
+      
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        setTestEmailResult({
+          success: true,
+          message: `API Health: ${data.status} às ${new Date(data.timestamp).toLocaleString()}`
+        });
+      } else {
+        const text = await response.text();
+        console.error('API Health Non-JSON Response:', text);
+        setTestEmailResult({
+          success: false,
+          message: `Erro: Resposta não é JSON (Status: ${response.status}). Verifique o console.`
+        });
+      }
     } catch (error: any) {
       setTestEmailResult({
         success: false,

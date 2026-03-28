@@ -13,19 +13,47 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Request logging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
 // Firebase Configuration for Server
 const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-let firebaseConfig: any = {};
+let firebaseConfig: any = {
+  apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  appId: process.env.FIREBASE_APP_ID,
+  firestoreDatabaseId: process.env.FIREBASE_DATABASE_ID
+};
+
 if (fs.existsSync(configPath)) {
-  firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  try {
+    const fileConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    firebaseConfig = { ...firebaseConfig, ...fileConfig };
+  } catch (err) {
+    console.error('Error reading firebase-applet-config.json:', err);
+  }
 }
 
 import { initializeApp as initializeClientApp } from 'firebase/app';
 import { getFirestore as getClientFirestore, collection, addDoc, getDocs, query, where, doc, deleteDoc } from 'firebase/firestore';
 
 // Initialize Firebase Client for Server (uses API Key)
-const clientApp = initializeClientApp(firebaseConfig);
-const db = getClientFirestore(clientApp, firebaseConfig.firestoreDatabaseId || '(default)');
+let db: any = null;
+try {
+  if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+    const clientApp = initializeClientApp(firebaseConfig);
+    db = getClientFirestore(clientApp, firebaseConfig.firestoreDatabaseId || '(default)');
+    console.log('Firebase initialized successfully on server.');
+  } else {
+    console.warn('Firebase configuration missing or incomplete. Some features may not work.');
+  }
+} catch (err) {
+  console.error('Firebase initialization error on server:', err);
+}
 
 // Web Push Configuration
 const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY;
@@ -42,7 +70,12 @@ if (vapidSubject && vapidPublicKey && vapidPrivateKey) {
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    firebaseInitialized: !!db,
+    vapidConfigured: !!(vapidSubject && vapidPublicKey && vapidPrivateKey)
+  });
 });
 
 let transporter: nodemailer.Transporter | null = null;
@@ -218,11 +251,18 @@ app.get('/api/verify-session/:sessionId', async (req, res) => {
 
 // Push Notification Endpoints
 app.get('/api/push/vapid-public-key', (req, res) => {
+  if (!vapidPublicKey) {
+    console.error('VAPID public key not configured');
+    return res.status(500).json({ error: 'VAPID public key not configured' });
+  }
   res.json({ publicKey: vapidPublicKey });
 });
 
 app.post('/api/push/subscribe', async (req, res) => {
   try {
+    if (!db) {
+      throw new Error('Firestore not initialized. Please check your configuration.');
+    }
     const subscription = req.body;
     
     // Check if subscription already exists in Firestore
@@ -246,6 +286,9 @@ app.post('/api/push/subscribe', async (req, res) => {
 
 app.post('/api/push/notify-admin', async (req, res) => {
   try {
+    if (!db) {
+      throw new Error('Firestore not initialized. Please check your configuration.');
+    }
     const { title, body, icon, url } = req.body;
     
     const payload = JSON.stringify({
@@ -286,6 +329,15 @@ app.post('/api/push/notify-admin', async (req, res) => {
     console.error('Notify Admin Error:', error);
     res.status(500).json({ error: error.message });
   }
+});
+
+// Global Error Handler
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error('Unhandled Server Error:', err);
+  res.status(500).json({ 
+    error: err.message || 'Internal Server Error',
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
 });
 
 export default app;
