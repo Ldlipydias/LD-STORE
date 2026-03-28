@@ -4,8 +4,6 @@ import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
 import cors from 'cors';
 import webpush from 'web-push';
-import admin from 'firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
 import fs from 'fs';
 import path from 'path';
 
@@ -22,15 +20,12 @@ if (fs.existsSync(configPath)) {
   firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 }
 
-// Initialize Firebase Admin
-if (!admin.apps.length) {
-  admin.initializeApp({
-    projectId: firebaseConfig.projectId
-  });
-}
+import { initializeApp as initializeClientApp } from 'firebase/app';
+import { getFirestore as getClientFirestore, collection, addDoc, getDocs, query, where, doc, deleteDoc } from 'firebase/firestore';
 
-// CRITICAL: Must specify the databaseId for non-default databases in AI Studio
-const db = getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId || '(default)');
+// Initialize Firebase Client for Server (uses API Key)
+const clientApp = initializeClientApp(firebaseConfig);
+const db = getClientFirestore(clientApp, firebaseConfig.firestoreDatabaseId || '(default)');
 
 // Web Push Configuration
 const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY;
@@ -231,12 +226,11 @@ app.post('/api/push/subscribe', async (req, res) => {
     const subscription = req.body;
     
     // Check if subscription already exists in Firestore
-    const snapshot = await db.collection('admin_subscriptions')
-      .where('endpoint', '==', subscription.endpoint)
-      .get();
+    const q = query(collection(db as any, 'admin_subscriptions'), where('endpoint', '==', subscription.endpoint));
+    const snapshot = await getDocs(q);
     
     if (snapshot.empty) {
-      await db.collection('admin_subscriptions').add({
+      await addDoc(collection(db as any, 'admin_subscriptions'), {
         ...subscription,
         createdAt: new Date().toISOString()
       });
@@ -264,7 +258,7 @@ app.post('/api/push/notify-admin', async (req, res) => {
     });
 
     // Fetch all subscriptions from Firestore
-    const snapshot = await db.collection('admin_subscriptions').get();
+    const snapshot = await getDocs(collection(db as any, 'admin_subscriptions'));
     const adminSubscriptions = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
     console.log(`Sending push notification to ${adminSubscriptions.length} admins: ${title}`);
@@ -276,7 +270,7 @@ app.post('/api/push/notify-admin', async (req, res) => {
           if (error.statusCode === 410 || error.statusCode === 404) {
             // Subscription has expired or is no longer valid, delete from Firestore
             try {
-              await db.collection('admin_subscriptions').doc(subscription.id).delete();
+              await deleteDoc(doc(db as any, 'admin_subscriptions', subscription.id));
               console.log('Removed expired subscription from Firestore.');
             } catch (delErr) {
               console.error('Error deleting expired subscription:', delErr);
