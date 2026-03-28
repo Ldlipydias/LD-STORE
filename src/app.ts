@@ -69,12 +69,24 @@ if (vapidSubject && vapidPublicKey && vapidPrivateKey) {
 }
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  let subscriptionCount = 0;
+  if (db) {
+    try {
+      const snapshot = await getDocs(collection(db as any, 'admin_subscriptions'));
+      subscriptionCount = snapshot.size;
+    } catch (err) {
+      console.error('Error counting subscriptions for health check:', err);
+    }
+  }
+
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
     firebaseInitialized: !!db,
-    vapidConfigured: !!(vapidSubject && vapidPublicKey && vapidPrivateKey)
+    databaseId: firebaseConfig.firestoreDatabaseId || '(default)',
+    vapidConfigured: !!(vapidSubject && vapidPublicKey && vapidPrivateKey),
+    subscriptionCount
   });
 });
 
@@ -266,6 +278,11 @@ app.post('/api/push/subscribe', async (req, res) => {
     const subscription = req.body;
     
     // Check if subscription already exists in Firestore
+    if (!subscription || !subscription.endpoint) {
+      console.error('Invalid subscription object received:', subscription);
+      return res.status(400).json({ error: 'Objeto de inscrição inválido.' });
+    }
+
     const q = query(collection(db as any, 'admin_subscriptions'), where('endpoint', '==', subscription.endpoint));
     const snapshot = await getDocs(q);
     
@@ -274,7 +291,9 @@ app.post('/api/push/subscribe', async (req, res) => {
         ...subscription,
         createdAt: new Date().toISOString()
       });
-      console.log('New admin subscription added to Firestore.');
+      console.log('New admin subscription added to Firestore:', subscription.endpoint);
+    } else {
+      console.log('Admin subscription already exists:', subscription.endpoint);
     }
     
     res.status(201).json({ success: true });
@@ -301,8 +320,20 @@ app.post('/api/push/notify-admin', async (req, res) => {
     });
 
     // Fetch all subscriptions from Firestore
+    console.log('Fetching admin subscriptions from Firestore...');
     const snapshot = await getDocs(collection(db as any, 'admin_subscriptions'));
     const adminSubscriptions = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    console.log(`Found ${adminSubscriptions.length} admin subscriptions.`);
+
+    if (adminSubscriptions.length === 0) {
+      console.warn('No admin subscriptions found in Firestore.');
+      return res.json({ 
+        success: false, 
+        sentCount: 0, 
+        error: 'Nenhum dispositivo inscrito encontrado. Por favor, clique em "ATIVAR NOTIFICAÇÕES" neste dispositivo primeiro.' 
+      });
+    }
 
     console.log(`Sending push notification to ${adminSubscriptions.length} admins: ${title}`);
 

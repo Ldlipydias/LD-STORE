@@ -93,11 +93,16 @@ export default function Admin() {
       setPushPermission(Notification.permission);
 
       // Send subscription to server
-      await fetch('/api/push/subscribe', {
+      const subResponse = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(subscription)
       });
+
+      if (!subResponse.ok) {
+        const subData = await subResponse.json().catch(() => ({ error: 'Erro ao salvar inscrição no servidor.' }));
+        throw new Error(subData.error || 'Erro ao salvar inscrição no servidor.');
+      }
 
       setPushSubscribed(true);
       alert('Notificações ativadas com sucesso! Você receberá alertas reais no seu celular.');
@@ -127,7 +132,12 @@ export default function Admin() {
         if (data.success) {
           alert(`Notificação enviada com sucesso para ${data.sentCount} dispositivo(s)!`);
         } else {
-          alert('Erro ao enviar notificação: ' + (data.error || 'Erro desconhecido'));
+          const errorMsg = data.error || 'Erro desconhecido';
+          if (errorMsg.includes('inscrito encontrado')) {
+            alert('Aviso: ' + errorMsg);
+          } else {
+            alert('Erro ao enviar notificação: ' + errorMsg);
+          }
         }
       } else {
         const text = await response.text();
@@ -345,7 +355,7 @@ export default function Admin() {
         const data = await response.json();
         setTestEmailResult({
           success: true,
-          message: `API Health: ${data.status} às ${new Date(data.timestamp).toLocaleString()}`
+          message: `API Health: ${data.status} | DB: ${data.databaseId} | Inscritos: ${data.subscriptionCount} | VAPID: ${data.vapidConfigured ? 'OK' : 'FALTA'} | ${new Date(data.timestamp).toLocaleString()}`
         });
       } else {
         const text = await response.text();
