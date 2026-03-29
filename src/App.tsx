@@ -65,7 +65,7 @@ export default function App() {
         <main className="container mx-auto px-4 py-8">
           <Routes>
             <Route path="/" element={<Home user={user} isAdmin={isAdmin} />} />
-            <Route path="/store" element={user ? <Store user={user} /> : <Navigate to="/" />} />
+            <Route path="/store" element={<Store user={user} />} />
             <Route path="/admin" element={isAdmin ? <Admin /> : <Navigate to="/" />} />
             <Route path="/success" element={<Success user={user} />} />
             <Route path="*" element={<Navigate to="/" />} />

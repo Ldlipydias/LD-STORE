@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import PixPaymentModal from '../components/PixPaymentModal';
 import SupportModal from '../components/SupportModal';
 import ProductDetailsModal from '../components/ProductDetailsModal';
+import { loginWithGoogle } from '../firebase';
 
 const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
 const stripePromise = STRIPE_PUBLISHABLE_KEY ? loadStripe(STRIPE_PUBLISHABLE_KEY) : null;
@@ -19,7 +20,7 @@ console.log('import.meta.env keys:', Object.keys(import.meta.env).filter(k => k.
 console.log('-------------------------');
 
 interface StoreProps {
-  user: User;
+  user: User | null;
 }
 
 export default function Store({ user }: StoreProps) {
@@ -38,23 +39,25 @@ export default function Store({ user }: StoreProps) {
   useEffect(() => {
     fetchData();
 
-    // Listen to unread support messages (most recent ticket)
-    const q = query(
-      collection(db, 'support_tickets'),
-      where('userId', '==', user.uid),
-      orderBy('updatedAt', 'desc'),
-      limit(1)
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
-        const ticket = snapshot.docs[0].data();
-        setUnreadSupportMessages(ticket.unreadByUser || 0);
-      } else {
-        setUnreadSupportMessages(0);
-      }
-    });
+    if (user) {
+      // Listen to unread support messages (most recent ticket)
+      const q = query(
+        collection(db, 'support_tickets'),
+        where('userId', '==', user.uid),
+        orderBy('updatedAt', 'desc'),
+        limit(1)
+      );
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        if (!snapshot.empty) {
+          const ticket = snapshot.docs[0].data();
+          setUnreadSupportMessages(ticket.unreadByUser || 0);
+        } else {
+          setUnreadSupportMessages(0);
+        }
+      });
 
-    return () => unsubscribe();
+      return () => unsubscribe();
+    }
   }, [user]);
 
   const fetchData = async () => {
@@ -63,16 +66,21 @@ export default function Store({ user }: StoreProps) {
       const prods = await getDocs(query(collection(db, 'products'), orderBy('createdAt', 'desc')));
       setProducts(prods.docs.map(d => ({ id: d.id, ...d.data() })));
 
-      const orders = await getDocs(query(
-        collection(db, 'orders'),
-        where('userId', '==', user.uid)
-      ));
-      
-      const paid = orders.docs.filter(d => d.data().status === 'paid').map(d => d.data().productId);
-      const pending = orders.docs.filter(d => d.data().status === 'pending').map(d => d.data().productId);
-      
-      setUserOrders(paid);
-      setUserPendingOrders(pending);
+      if (user) {
+        const orders = await getDocs(query(
+          collection(db, 'orders'),
+          where('userId', '==', user.uid)
+        ));
+        
+        const paid = orders.docs.filter(d => d.data().status === 'paid').map(d => d.data().productId);
+        const pending = orders.docs.filter(d => d.data().status === 'pending').map(d => d.data().productId);
+        
+        setUserOrders(paid);
+        setUserPendingOrders(pending);
+      } else {
+        setUserOrders([]);
+        setUserPendingOrders([]);
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -81,6 +89,16 @@ export default function Store({ user }: StoreProps) {
   };
 
   const handleBuy = async (product: any) => {
+    if (!user) {
+      try {
+        await loginWithGoogle();
+        return; // After login, they can click again
+      } catch (error) {
+        console.error('Login error:', error);
+        return;
+      }
+    }
+
     if (!STRIPE_PUBLISHABLE_KEY) {
       alert('Erro: Chave pública do Stripe não configurada. \n\nSe você está no Netlify: Adicione VITE_STRIPE_PUBLISHABLE_KEY nas "Environment Variables" do painel do Netlify e faça um novo Deploy.\n\nSe você está no AI Studio: Adicione nos Secrets.');
       return;
@@ -131,6 +149,32 @@ export default function Store({ user }: StoreProps) {
     } finally {
       setBuyingId(null);
     }
+  };
+
+  const handlePix = async (product: any) => {
+    if (!user) {
+      try {
+        await loginWithGoogle();
+        return;
+      } catch (error) {
+        console.error('Login error:', error);
+        return;
+      }
+    }
+    setPixProduct(product);
+  };
+
+  const handleSupport = async () => {
+    if (!user) {
+      try {
+        await loginWithGoogle();
+        return;
+      } catch (error) {
+        console.error('Login error:', error);
+        return;
+      }
+    }
+    setIsSupportOpen(true);
   };
 
   if (loading) {
@@ -286,13 +330,13 @@ export default function Store({ user }: StoreProps) {
         </div>
       )}
 
-      {pixProduct && (
+      {pixProduct && user && (
         <PixPaymentModal
           isOpen={!!pixProduct}
           onClose={() => setPixProduct(null)}
           product={pixProduct}
           userId={user.uid}
-          userEmail={user.email}
+          userEmail={user.email || ''}
           onSuccess={() => {
             fetchData();
             setPixProduct(null);
@@ -311,14 +355,14 @@ export default function Store({ user }: StoreProps) {
           }}
           onPix={(prod) => {
             setSelectedProductDetails(null);
-            setPixProduct(prod);
+            handlePix(prod);
           }}
         />
       )}
 
       {/* Floating Support Button */}
       <button
-        onClick={() => setIsSupportOpen(true)}
+        onClick={handleSupport}
         className="fixed bottom-6 right-6 z-40 p-4 rounded-full bg-purple-600 text-white shadow-xl shadow-purple-500/30 hover:bg-purple-500 hover:scale-105 transition-all flex items-center justify-center group"
       >
         <MessageSquare className="w-6 h-6" />
@@ -329,12 +373,14 @@ export default function Store({ user }: StoreProps) {
         )}
       </button>
 
-      <SupportModal
-        isOpen={isSupportOpen}
-        onClose={() => setIsSupportOpen(false)}
-        userId={user.uid}
-        userEmail={user.email}
-      />
+      {user && (
+        <SupportModal
+          isOpen={isSupportOpen}
+          onClose={() => setIsSupportOpen(false)}
+          userId={user.uid}
+          userEmail={user.email || ''}
+        />
+      )}
     </div>
   );
 }

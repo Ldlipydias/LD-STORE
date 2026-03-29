@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { User } from 'firebase/auth';
-import { logout } from '../firebase';
-import { LogOut, Store, LayoutDashboard, BadgeCheck, Download } from 'lucide-react';
+import { logout, loginWithGoogle } from '../firebase';
+import { LogOut, Store, LayoutDashboard, BadgeCheck, Download, LogIn } from 'lucide-react';
 import metadata from '../../metadata.json';
 
 interface NavbarProps {
@@ -44,6 +44,14 @@ export default function Navbar({ user, isAdmin }: NavbarProps) {
     navigate('/');
   };
 
+  const handleLogin = async () => {
+    try {
+      await loginWithGoogle();
+    } catch (error) {
+      console.error('Login error:', error);
+    }
+  };
+
   return (
     <nav className="border-b border-white/5 bg-black/40 backdrop-blur-2xl sticky top-0 z-50">
       <div className="container mx-auto px-6 h-20 flex items-center justify-between">
@@ -51,7 +59,7 @@ export default function Navbar({ user, isAdmin }: NavbarProps) {
           <div className="relative">
             <div className="absolute inset-0 bg-purple-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             <img 
-              src="https://i.ibb.co/rKSwsh4q/Chat-GPT-Image-26-de-mar-de-2026-23-36-08.png" 
+              src="https://i.ibb.co/Ld56XhCf/Chat-GPT-Image-28-de-mar-de-2026-23-21-40.png" 
               alt={metadata.name} 
               className="h-12 w-auto object-contain relative z-10 group-hover:scale-110 transition-transform duration-700"
               referrerPolicy="no-referrer"
@@ -101,9 +109,10 @@ export default function Navbar({ user, isAdmin }: NavbarProps) {
               </button>
             </>
           ) : (
-            <Link to="/" className="pro-button pro-button-primary py-2 px-6 text-[10px]">
+            <button onClick={handleLogin} className="pro-button pro-button-primary py-2 px-6 text-[10px] flex items-center gap-2">
+              <LogIn className="w-4 h-4" />
               ENTRAR
-            </Link>
+            </button>
           )}
         </div>
       </div>

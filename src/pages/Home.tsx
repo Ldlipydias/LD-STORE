@@ -103,7 +103,7 @@ export default function Home({ user, isAdmin }: HomeProps) {
         <div className="relative group">
           <div className="absolute inset-0 bg-purple-500/20 blur-[80px] rounded-full group-hover:bg-purple-500/40 transition-all duration-1000" />
           <img 
-            src="https://i.ibb.co/gLNrfByH/Chat-GPT-Image-20-de-mar-de-2026-23-30-58.png" 
+            src="https://i.ibb.co/Ld56XhCf/Chat-GPT-Image-28-de-mar-de-2026-23-21-40.png" 
             alt={metadata.name} 
             className="h-64 md:h-96 w-auto object-contain relative z-10 drop-shadow-[0_0_60px_rgba(147,51,234,0.4)] hover:scale-105 transition-transform duration-1000"
             referrerPolicy="no-referrer"
@@ -133,41 +133,24 @@ export default function Home({ user, isAdmin }: HomeProps) {
         transition={{ delay: 0.8, duration: 0.8 }}
         className="flex flex-col sm:flex-row gap-6"
       >
-        {!user ? (
+        <div className="flex flex-col sm:flex-row gap-6">
           <button
-            onClick={handleLogin}
-            disabled={loading}
-            className="pro-button pro-button-primary flex items-center gap-4 px-12 py-5 text-xl disabled:opacity-50 group"
+            onClick={() => navigate('/store')}
+            className="pro-button pro-button-primary flex items-center gap-4 px-12 py-5 text-xl group"
           >
-            {loading ? (
-              <Loader2 className="w-6 h-6 animate-spin" />
-            ) : (
-              <>
-                <span>Explorar Agora</span>
-                <ShoppingBag className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
-              </>
-            )}
+            <span>Acessar Catálogo</span>
+            <ShoppingBag className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
           </button>
-        ) : (
-          <div className="flex flex-col sm:flex-row gap-6">
+          {isAdmin && (
             <button
-              onClick={() => navigate('/store')}
-              className="pro-button pro-button-primary flex items-center gap-4 px-12 py-5 text-xl group"
+              onClick={() => navigate('/admin')}
+              className="pro-button pro-button-secondary flex items-center gap-4 px-12 py-5 text-xl"
             >
-              <span>Acessar Catálogo</span>
-              <ShoppingBag className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+              <span>Painel Gestor</span>
+              <ShieldCheck className="w-6 h-6" />
             </button>
-            {isAdmin && (
-              <button
-                onClick={() => navigate('/admin')}
-                className="pro-button pro-button-secondary flex items-center gap-4 px-12 py-5 text-xl"
-              >
-                <span>Painel Gestor</span>
-                <ShieldCheck className="w-6 h-6" />
-              </button>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </motion.div>
 
       <div className="w-full overflow-hidden py-12 border-y border-white/5 bg-white/[0.01]">
