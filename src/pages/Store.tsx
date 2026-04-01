@@ -36,6 +36,19 @@ export default function Store({ user }: StoreProps) {
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [unreadSupportMessages, setUnreadSupportMessages] = useState(0);
 
+  // Load pending PIX product from localStorage on mount
+  useEffect(() => {
+    const savedPixProduct = localStorage.getItem('pending_pix_product');
+    if (savedPixProduct) {
+      try {
+        setPixProduct(JSON.parse(savedPixProduct));
+      } catch (e) {
+        console.error('Error parsing saved pix product:', e);
+        localStorage.removeItem('pending_pix_product');
+      }
+    }
+  }, []);
+
   useEffect(() => {
     fetchData();
 
@@ -153,6 +166,8 @@ export default function Store({ user }: StoreProps) {
 
   const handlePix = async (product: any) => {
     if (!user) {
+      // Save product to localStorage before login redirect/popup
+      localStorage.setItem('pending_pix_product', JSON.stringify(product));
       try {
         await loginWithGoogle();
         return;
@@ -162,6 +177,7 @@ export default function Store({ user }: StoreProps) {
       }
     }
     setPixProduct(product);
+    localStorage.setItem('pending_pix_product', JSON.stringify(product));
   };
 
   const handleSupport = async () => {
@@ -330,16 +346,46 @@ export default function Store({ user }: StoreProps) {
         </div>
       )}
 
+      {/* Pending PIX Alert for logged out users */}
+      {!user && localStorage.getItem('pending_pix_product') && (
+        <motion.div
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-24 left-6 right-6 md:left-auto md:right-24 z-50 bg-amber-500 text-black p-6 rounded-3xl shadow-2xl flex flex-col md:flex-row items-center gap-4 border-2 border-black/10"
+        >
+          <div className="flex-1">
+            <h4 className="font-black text-sm uppercase tracking-tight">Pagamento Pendente Detectado</h4>
+            <p className="text-xs font-medium opacity-80">Você iniciou um pagamento PIX. Faça login para anexar o comprovante e liberar seu produto.</p>
+          </div>
+          <button
+            onClick={() => loginWithGoogle()}
+            className="px-6 py-2 bg-black text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-transform"
+          >
+            FAZER LOGIN AGORA
+          </button>
+          <button
+            onClick={() => localStorage.removeItem('pending_pix_product')}
+            className="text-[10px] font-bold opacity-50 hover:opacity-100"
+          >
+            DESCARTAR
+          </button>
+        </motion.div>
+      )}
+
       {pixProduct && user && (
         <PixPaymentModal
           isOpen={!!pixProduct}
-          onClose={() => setPixProduct(null)}
+          onClose={() => {
+            setPixProduct(null);
+            localStorage.removeItem('pending_pix_product');
+          }}
           product={pixProduct}
           userId={user.uid}
           userEmail={user.email || ''}
           onSuccess={() => {
             fetchData();
             setPixProduct(null);
+            localStorage.removeItem('pending_pix_product');
           }}
         />
       )}

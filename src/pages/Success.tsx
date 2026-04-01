@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { db } from '../firebase';
+import { db, loginWithGoogle } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { User } from 'firebase/auth';
-import { CheckCircle2, Loader2, XCircle, Download, ArrowRight } from 'lucide-react';
+import { CheckCircle2, Loader2, XCircle, Download, ArrowRight, LogIn } from 'lucide-react';
 import { motion } from 'motion/react';
 import { notifyAdmin } from '../services/notifications';
 
@@ -23,9 +23,15 @@ export default function Success({ user }: SuccessProps) {
       const sessionId = searchParams.get('session_id');
       const productId = searchParams.get('product_id');
 
-      if (!sessionId || !productId || !user) {
+      if (!sessionId || !productId) {
         setStatus('error');
-        setErrorMsg('Parâmetros inválidos ou usuário não autenticado.');
+        setErrorMsg('Parâmetros de sessão inválidos.');
+        return;
+      }
+
+      if (!user) {
+        setStatus('error');
+        setErrorMsg('Você precisa estar logado para verificar seu pagamento.');
         return;
       }
 
@@ -107,12 +113,24 @@ export default function Success({ user }: SuccessProps) {
         </motion.div>
         <h2 className="text-3xl font-black">Ops! Algo deu errado.</h2>
         <p className="text-gray-400 text-center max-w-md">{errorMsg}</p>
-        <button
-          onClick={() => navigate('/store')}
-          className="px-8 py-3 rounded-full bg-white/10 hover:bg-white/20 font-bold transition-all"
-        >
-          Voltar para a Loja
-        </button>
+        
+        <div className="flex flex-col gap-4 w-full max-w-xs">
+          {!user && (
+            <button
+              onClick={() => loginWithGoogle()}
+              className="flex items-center justify-center gap-2 w-full py-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black transition-all shadow-lg shadow-purple-500/25"
+            >
+              <LogIn className="w-5 h-5" />
+              FAZER LOGIN
+            </button>
+          )}
+          <button
+            onClick={() => navigate('/store')}
+            className="px-8 py-3 rounded-full bg-white/10 hover:bg-white/20 font-bold transition-all"
+          >
+            Voltar para a Loja
+          </button>
+        </div>
       </div>
     );
   }
