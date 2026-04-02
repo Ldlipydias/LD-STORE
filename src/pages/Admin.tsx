@@ -22,7 +22,12 @@ export default function Admin() {
   const [replying, setReplying] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
   const [testEmailResult, setTestEmailResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'orders' | 'support' | 'products' | 'settings'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'support' | 'products' | 'settings' | 'users'>('orders');
+  const [users, setUsers] = useState<any[]>([]);
+  const [allOrders, setAllOrders] = useState<any[]>([]);
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
+  const [messageModal, setMessageModal] = useState<{ show: boolean; user: any; subject: string; body: string } | null>(null);
+  const [sendingMessage, setSendingMessage] = useState(false);
   const [showDeliverModal, setShowDeliverModal] = useState(false);
   const [delivering, setDelivering] = useState(false);
   const [rejectingOrder, setRejectingOrder] = useState<any | null>(null);
@@ -303,6 +308,12 @@ export default function Admin() {
   const fetchData = async () => {
     const prods = await getDocs(query(collection(db, 'products'), orderBy('name')));
     setProducts(prods.docs.map(d => ({ id: d.id, ...d.data() })));
+
+    const usersSnap = await getDocs(query(collection(db, 'users'), orderBy('createdAt', 'desc')));
+    setUsers(usersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+    const ordersSnap = await getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc')));
+    setAllOrders(ordersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
   };
 
   const fetchPixSettings = async () => {
@@ -695,6 +706,40 @@ export default function Admin() {
     }
   };
 
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!messageModal || !messageModal.body.trim()) return;
+    setSendingMessage(true);
+    try {
+      const response = await fetch('/api/send-support-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: messageModal.user.email,
+          subject: messageModal.subject || 'Novidades da LD STORE',
+          text: messageModal.body,
+          html: `
+            <div style="font-family: sans-serif; padding: 20px; color: #333;">
+              <h2 style="color: #6366f1;">LD STORE - Novidades</h2>
+              <div style="background: #f3f4f6; padding: 20px; border-radius: 15px; margin: 20px 0; line-height: 1.6;">
+                ${messageModal.body.replace(/\n/g, '<br>')}
+              </div>
+              <p style="font-size: 12px; color: #666;">Você está recebendo este e-mail porque possui uma conta na LD STORE.</p>
+            </div>
+          `
+        })
+      });
+
+      if (!response.ok) throw new Error('Erro ao enviar e-mail');
+      alert('Mensagem enviada com sucesso!');
+      setMessageModal(null);
+    } catch (error: any) {
+      alert('Erro: ' + error.message);
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
   const handleUpdateQueueCount = async (newCount: number) => {
     try {
       await setDoc(doc(db, 'settings', 'support'), { virtualQueueCount: Math.max(0, newCount) }, { merge: true });
@@ -875,6 +920,62 @@ export default function Admin() {
             </motion.div>
           </div>
         )}
+
+        {messageModal && messageModal.show && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-zinc-900 border border-white/10 rounded-[2rem] w-full max-w-lg p-8 space-y-6"
+            >
+              <div className="text-center space-y-2">
+                <h2 className="text-xl font-black uppercase tracking-tight">Enviar Mensagem</h2>
+                <p className="text-gray-400 text-sm">Para: {messageModal.user.email}</p>
+              </div>
+
+              <form onSubmit={handleSendMessage} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Assunto</label>
+                  <input
+                    type="text"
+                    value={messageModal.subject}
+                    onChange={(e) => setMessageModal({ ...messageModal, subject: e.target.value })}
+                    placeholder="Ex: Novidades da LD STORE"
+                    className="w-full px-4 py-3 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Mensagem</label>
+                  <textarea
+                    value={messageModal.body}
+                    onChange={(e) => setMessageModal({ ...messageModal, body: e.target.value })}
+                    placeholder="Digite sua mensagem aqui..."
+                    className="w-full px-4 py-3 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none h-48 text-sm"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setMessageModal(null)}
+                    className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 font-bold text-sm transition-all"
+                  >
+                    CANCELAR
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={sendingMessage || !messageModal.body.trim()}
+                    className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm transition-all flex items-center justify-center gap-2"
+                  >
+                    {sendingMessage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    ENVIAR AGORA
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
 
       {/* Floating Notifications */}
@@ -974,6 +1075,7 @@ export default function Admin() {
 
           {[
             { id: 'orders', label: 'Pedidos', icon: ShoppingBag, count: pendingOrders.length },
+            { id: 'users', label: 'Clientes', icon: Users, count: users.length },
             { id: 'support', label: 'Suporte', icon: MessageSquare, count: supportTickets.filter(t => t.unreadByAdmin).length },
             { id: 'products', label: 'Produtos', icon: ImageIcon },
             { id: 'settings', label: 'Ajustes', icon: Activity }
@@ -1580,11 +1682,109 @@ export default function Admin() {
                 </div>
               </div>
             ))}
+            </div>
           </div>
         </div>
+        )}
+
+        {/* Users Section */}
+        {activeTab === 'users' && (
+          <div className="space-y-8">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-black flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-purple-500/20">
+                  <Users className="w-6 h-6 text-purple-500" />
+                </div>
+                HISTÓRICO DE CLIENTES
+              </h2>
+              <div className="flex items-center gap-4 bg-white/5 p-2 rounded-xl border border-white/10">
+                <span className="text-xs font-bold text-gray-400 uppercase px-4">{users.length} USUÁRIOS</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {users.map(user => {
+                const userOrders = allOrders.filter(o => o.userId === user.id);
+                const totalSpent = userOrders.reduce((acc, o) => acc + (o.price || o.amount || 0), 0);
+                
+                return (
+                  <div key={user.id} className="p-6 rounded-3xl bg-white/5 border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-purple-500/30 transition-all group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20 group-hover:scale-110 transition-transform">
+                        <Users className="w-6 h-6 text-purple-400" />
+                      </div>
+                      <div>
+                        <p className="font-black text-lg leading-tight">{user.email}</p>
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">
+                          Desde: {new Date(user.createdAt).toLocaleDateString()} • ID: {user.id.substring(0, 8)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-6">
+                      <div className="text-center md:text-right">
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Pedidos</p>
+                        <p className="font-black text-white">{userOrders.length}</p>
+                      </div>
+                      <div className="text-center md:text-right">
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Total Gasto</p>
+                        <p className="font-black text-emerald-400">$ {totalSpent.toFixed(2)}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setSelectedUser(selectedUser?.id === user.id ? null : user)}
+                          className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+                        >
+                          {selectedUser?.id === user.id ? 'FECHAR HISTÓRICO' : 'VER HISTÓRICO'}
+                        </button>
+                        <button
+                          onClick={() => setMessageModal({ show: true, user, subject: '', body: '' })}
+                          className="px-4 py-2 rounded-xl bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-purple-500 transition-all flex items-center gap-2"
+                        >
+                          <Mail className="w-3 h-3" />
+                          MENSAGEM
+                        </button>
+                      </div>
+                    </div>
+
+                    {selectedUser?.id === user.id && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="w-full mt-6 pt-6 border-t border-white/10 space-y-4"
+                      >
+                        <h4 className="text-xs font-black uppercase tracking-widest text-gray-400">Histórico de Compras</h4>
+                        {userOrders.length === 0 ? (
+                          <p className="text-xs text-gray-500 italic">Nenhum pedido realizado ainda.</p>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {userOrders.map(order => (
+                              <div key={order.id} className="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-2">
+                                <div className="flex justify-between items-start">
+                                  <p className="font-bold text-sm">{order.productName}</p>
+                                  <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${
+                                    order.status === 'paid' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                                  }`}>
+                                    {order.status}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-end">
+                                  <p className="text-xs text-gray-500">{new Date(order.createdAt).toLocaleDateString()}</p>
+                                  <p className="font-black text-white text-sm">$ {(order.price || order.amount || 0).toFixed(2)}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
-    )}
-  </div>
-</div>
+    </div>
   );
 }
