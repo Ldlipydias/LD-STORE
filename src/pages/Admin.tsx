@@ -553,6 +553,33 @@ export default function Admin() {
       }
 
       alert('Produto liberado com sucesso!');
+      
+      // Send email notification about approval
+      if (order.userEmail) {
+        try {
+          console.log('Sending approval email to:', order.userEmail);
+          await fetch('/api/send-support-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: order.userEmail,
+              subject: `[Pagamento Aprovado] Seu pedido: ${order.productName} - LD STORE`,
+              html: `
+                <div style="font-family: sans-serif; padding: 20px; color: #333;">
+                  <h2 style="color: #10b981;">Pagamento Aprovado!</h2>
+                  <p>Olá,</p>
+                  <p>Seu pagamento para o produto <strong>${order.productName}</strong> foi aprovado com sucesso.</p>
+                  <p>Você já pode acessar seu produto em nosso site na seção de "Meus Pedidos".</p>
+                  <p style="font-size: 12px; color: #666; margin-top: 30px;">LD STORE - Obrigado pela sua compra!</p>
+                </div>
+              `
+            })
+          });
+        } catch (emailError) {
+          console.error('Error sending approval email:', emailError);
+        }
+      }
+
       fetchData();
     } catch (error: any) {
       console.error('Erro ao aprovar PIX:', error);
@@ -564,14 +591,46 @@ export default function Admin() {
 
   const handleRejectPix = async () => {
     if (!rejectingOrder) return;
+    if (!rejectingOrder.userEmail) {
+      alert('Erro: Este pedido não possui um e-mail de usuário associado para notificação.');
+      return;
+    }
 
     setIsRejecting(true);
+    console.log('Attempting to reject order and notify:', rejectingOrder.userEmail);
     try {
       await updateDoc(doc(db, 'orders', rejectingOrder.id), {
         status: 'rejected',
         rejectionReason: rejectionReason,
         rejectedAt: new Date().toISOString()
       });
+
+      // Send email notification about rejection
+      try {
+        await fetch('/api/send-support-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: rejectingOrder.userEmail,
+            subject: `[Pedido Rejeitado] Atualização sobre seu pedido na LD STORE`,
+            html: `
+              <div style="font-family: sans-serif; padding: 20px; color: #333;">
+                <h2 style="color: #ef4444;">Pedido Rejeitado</h2>
+                <p>Olá,</p>
+                <p>Infelizmente seu pedido do produto <strong>${rejectingOrder.productName}</strong> foi rejeitado.</p>
+                <div style="background: #fee2e2; padding: 15px; border-radius: 10px; margin: 20px 0;">
+                  <strong>Motivo:</strong> ${rejectionReason}
+                </div>
+                <p>Se você acredita que isso foi um erro, por favor entre em contato com nosso suporte.</p>
+                <p style="font-size: 12px; color: #666; margin-top: 30px;">LD STORE - Agradecemos a compreensão.</p>
+              </div>
+            `
+          })
+        });
+      } catch (emailError) {
+        console.error('Error sending rejection email:', emailError);
+      }
+
       setRejectingOrder(null);
       setRejectionReason('');
     } catch (error) {
@@ -585,7 +644,12 @@ export default function Admin() {
   const handleReplyTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!adminReply.trim() || !selectedTicket) return;
+    if (!selectedTicket.userEmail) {
+      alert('Erro: Este chamado não possui um e-mail de usuário associado.');
+      return;
+    }
     setReplying(true);
+    console.log('Attempting to reply to support ticket for:', selectedTicket.userEmail);
     try {
       const newMessage = {
         id: Date.now().toString(),
@@ -638,8 +702,13 @@ export default function Admin() {
   const handleDeliverProduct = async (product: any) => {
     if (!selectedTicket) return;
     if (!product) return;
+    if (!selectedTicket.userEmail) {
+      alert('Erro: Este chamado não possui um e-mail de usuário associado para entrega.');
+      return;
+    }
     
     setDelivering(true);
+    console.log('Attempting to deliver to:', selectedTicket.userEmail);
     try {
       // 1. Send email with product
       const response = await fetch('/api/send-support-email', {
@@ -710,6 +779,12 @@ export default function Admin() {
     e.preventDefault();
     if (!messageModal || !messageModal.body.trim()) return;
     setSendingMessage(true);
+    if (!messageModal.user?.email) {
+      alert('Erro: Este usuário não possui um e-mail cadastrado.');
+      setSendingMessage(false);
+      return;
+    }
+    console.log('Attempting to send manual message to:', messageModal.user.email);
     try {
       const response = await fetch('/api/send-support-email', {
         method: 'POST',

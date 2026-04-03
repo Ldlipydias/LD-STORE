@@ -175,9 +175,13 @@ app.post('/api/send-support-email', async (req, res) => {
   try {
     const { to, subject, text, html, replyTo } = req.body;
     const adminEmail = process.env.SMTP_USER;
-    const recipient = (to && to.includes('@')) ? to : adminEmail;
+    
+    console.log('[Email API] Received request:', { to, subject, hasText: !!text, hasHtml: !!html });
 
-    console.log('Attempting to send email to:', recipient);
+    // Prioritize 'to' if it looks like a valid email, otherwise fallback to admin
+    const recipient = (to && typeof to === 'string' && to.includes('@')) ? to : adminEmail;
+
+    console.log(`[Email API] Final recipient: ${recipient}`);
 
     const mailTransporter = getTransporter();
     if (!mailTransporter) {
