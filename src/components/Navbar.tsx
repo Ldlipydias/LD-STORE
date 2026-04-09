@@ -59,7 +59,7 @@ export default function Navbar({ user, isAdmin }: NavbarProps) {
           <div className="relative">
             <div className="absolute inset-0 bg-purple-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             <img 
-              src="https://i.ibb.co/Ld56XhCf/Chat-GPT-Image-28-de-mar-de-2026-23-21-40.png" 
+              src="https://i.ibb.co/PzW6qwP3/0cad1fd9-5619-4843-bd5a-65d18e570574.png" 
               alt={metadata.name} 
               className="h-12 w-auto object-contain relative z-10 group-hover:scale-110 transition-transform duration-700"
               referrerPolicy="no-referrer"

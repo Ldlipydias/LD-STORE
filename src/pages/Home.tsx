@@ -103,7 +103,7 @@ export default function Home({ user, isAdmin }: HomeProps) {
         <div className="relative group">
           <div className="absolute inset-0 bg-purple-500/20 blur-[80px] rounded-full group-hover:bg-purple-500/40 transition-all duration-1000" />
           <img 
-            src="https://i.ibb.co/Ld56XhCf/Chat-GPT-Image-28-de-mar-de-2026-23-21-40.png" 
+            src="https://i.ibb.co/PzW6qwP3/0cad1fd9-5619-4843-bd5a-65d18e570574.png" 
             alt={metadata.name} 
             className="h-64 md:h-96 w-auto object-contain relative z-10 drop-shadow-[0_0_60px_rgba(147,51,234,0.4)] hover:scale-105 transition-transform duration-1000"
             referrerPolicy="no-referrer"
