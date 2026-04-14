@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import PixPaymentModal from '../components/PixPaymentModal';
 import SupportModal from '../components/SupportModal';
 import ProductDetailsModal from '../components/ProductDetailsModal';
+import BannerCarousel from '../components/BannerCarousel';
 import { loginWithGoogle } from '../firebase';
 
 const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
@@ -217,6 +218,8 @@ export default function Store({ user }: StoreProps) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <BannerCarousel />
 
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-white/5 pb-12">
         <div className="space-y-4">

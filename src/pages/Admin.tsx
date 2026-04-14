@@ -22,7 +22,7 @@ export default function Admin() {
   const [replying, setReplying] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
   const [testEmailResult, setTestEmailResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'orders' | 'support' | 'products' | 'settings' | 'users'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'support' | 'products' | 'settings' | 'users' | 'banners'>('orders');
   const [users, setUsers] = useState<any[]>([]);
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
@@ -37,6 +37,8 @@ export default function Admin() {
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [subscribing, setSubscribing] = useState(false);
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
+  const [banners, setBanners] = useState<string[]>([]);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
 
   useEffect(() => {
     if (typeof Notification !== 'undefined') {
@@ -297,10 +299,20 @@ export default function Admin() {
         }
       });
 
+      // Listen for banners
+      const unsubscribeBanners = onSnapshot(doc(db, 'settings', 'banners'), (docSnap) => {
+        if (docSnap.exists()) {
+          setBanners(docSnap.data().images || []);
+        } else {
+          setDoc(doc(db, 'settings', 'banners'), { images: [] });
+        }
+      });
+
       return () => {
         unsubscribe();
         unsubscribeSupport();
         unsubscribeQueue();
+        unsubscribeBanners();
       };
     }
   }, [isAuthorized]);
@@ -1153,6 +1165,7 @@ export default function Admin() {
             { id: 'users', label: 'Clientes', icon: Users, count: users.length },
             { id: 'support', label: 'Suporte', icon: MessageSquare, count: supportTickets.filter(t => t.unreadByAdmin).length },
             { id: 'products', label: 'Produtos', icon: ImageIcon },
+            { id: 'banners', label: 'Banners', icon: ImageIcon },
             { id: 'settings', label: 'Ajustes', icon: Activity }
           ].map((tab) => (
             <button
@@ -1760,6 +1773,83 @@ export default function Admin() {
             </div>
           </div>
         </div>
+        )}
+
+        {/* Banners Section */}
+        {activeTab === 'banners' && (
+          <div className="space-y-8">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-black flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-purple-500/20">
+                  <ImageIcon className="w-6 h-6 text-purple-500" />
+                </div>
+                BANNERS DA LOJA
+              </h2>
+              <div className="flex items-center gap-4 bg-white/5 p-2 rounded-xl border border-white/10">
+                <span className="text-xs font-bold text-gray-400 uppercase px-4">{banners.length}/3 BANNERS</span>
+              </div>
+            </div>
+
+            <div className="p-8 rounded-3xl bg-white/5 border border-white/10 space-y-6">
+              <p className="text-gray-400 text-sm">
+                Adicione até 3 imagens para o carrossel da página inicial. As imagens devem ter proporção 16:9 (ex: 1920x1080).
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {banners.map((banner, index) => (
+                  <div key={index} className="relative aspect-video rounded-xl overflow-hidden border border-white/10 group">
+                    <img src={banner} alt={`Banner ${index + 1}`} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <button
+                        onClick={async () => {
+                          const newBanners = banners.filter((_, i) => i !== index);
+                          await setDoc(doc(db, 'settings', 'banners'), { images: newBanners });
+                        }}
+                        className="p-3 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {banners.length < 3 && (
+                  <label className="relative aspect-video rounded-xl border-2 border-dashed border-white/20 hover:border-purple-500/50 transition-colors flex flex-col items-center justify-center cursor-pointer bg-white/5 group">
+                    {uploadingBanner ? (
+                      <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+                    ) : (
+                      <>
+                        <Plus className="w-8 h-8 text-gray-400 group-hover:text-purple-400 transition-colors mb-2" />
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Adicionar Banner</span>
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploadingBanner}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        
+                        setUploadingBanner(true);
+                        try {
+                          const url = await uploadToImgBB(file);
+                          const newBanners = [...banners, url];
+                          await setDoc(doc(db, 'settings', 'banners'), { images: newBanners });
+                        } catch (error) {
+                          console.error('Error uploading banner:', error);
+                          alert('Erro ao fazer upload da imagem.');
+                        } finally {
+                          setUploadingBanner(false);
+                        }
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Users Section */}
