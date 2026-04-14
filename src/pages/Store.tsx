@@ -221,21 +221,7 @@ export default function Store({ user }: StoreProps) {
 
       <BannerCarousel />
 
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-white/5 pb-12">
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20">
-              <Sparkles className="w-6 h-6 text-purple-400" />
-            </div>
-            <h1 className="text-5xl font-black tracking-tighter pro-gradient-text">
-              NOSSO <span className="italic font-serif font-light lowercase">catálogo</span>
-            </h1>
-          </div>
-          <p className="text-gray-500 max-w-md font-medium leading-relaxed">
-            Explore nossa seleção exclusiva de ferramentas e aplicativos de alta performance.
-          </p>
-        </div>
-        
+      <div className="flex justify-end border-b border-white/5 pb-6">
         <div className="flex items-center gap-4 bg-white/[0.03] p-2 rounded-2xl border border-white/5">
           <div className="px-4 py-2 rounded-xl bg-white/5 text-white text-[10px] font-black uppercase tracking-widest">
             {products.length} PRODUTOS
