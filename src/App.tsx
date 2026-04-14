@@ -26,7 +26,7 @@ export default function App() {
       if (user) {
         setUser(user);
         // Check if user is admin
-        if (user.email === 'kakaxe188@gmail.com') {
+        if (user.email?.toLowerCase().trim() === 'kakaxe188@gmail.com') {
           setIsAdmin(true);
         }
         
@@ -36,7 +36,7 @@ export default function App() {
         if (!userSnap.exists()) {
           await setDoc(userRef, {
             email: user.email,
-            role: user.email === 'kakaxe188@gmail.com' ? 'admin' : 'user',
+            role: user.email?.toLowerCase().trim() === 'kakaxe188@gmail.com' ? 'admin' : 'user',
             createdAt: new Date().toISOString()
           });
         }

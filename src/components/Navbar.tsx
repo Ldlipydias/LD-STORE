@@ -85,15 +85,11 @@ export default function Navbar({ user, isAdmin }: NavbarProps) {
 
           {user ? (
             <>
-              <div className="hidden md:flex items-center gap-8">
-                <Link to="/store" className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/60 hover:text-white transition-all hover:translate-y-[-1px]">
-                  <Store className="w-4 h-4 text-purple-400" />
-                  CATÁLOGO
-                </Link>
+              <div className="flex items-center gap-4 md:gap-8">
                 {isAdmin && (
-                  <Link to="/admin" className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/60 hover:text-white transition-all hover:translate-y-[-1px]">
-                    <LayoutDashboard className="w-4 h-4 text-purple-400" />
-                    ADMINISTRAÇÃO
+                  <Link to="/admin" className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-white hover:text-purple-300 transition-all hover:translate-y-[-1px] bg-purple-500/20 md:bg-transparent px-3 py-2 md:p-0 rounded-lg">
+                    <LayoutDashboard className="w-5 h-5 md:w-4 md:h-4 text-purple-400" />
+                    <span className="hidden md:inline">ADMINISTRAÇÃO</span>
                   </Link>
                 )}
               </div>
@@ -102,10 +98,11 @@ export default function Navbar({ user, isAdmin }: NavbarProps) {
 
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-red-400/60 hover:text-red-400 transition-all group"
+                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-red-400/80 hover:text-red-400 transition-all group p-2 md:p-0"
+                title="Sair"
               >
-                <LogOut className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                SAIR
+                <LogOut className="w-5 h-5 md:w-4 md:h-4 group-hover:translate-x-1 transition-transform" />
+                <span className="hidden md:inline">SAIR</span>
               </button>
             </>
           ) : (
