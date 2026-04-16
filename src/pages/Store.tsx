@@ -311,10 +311,10 @@ export default function Store({ user }: StoreProps) {
                     <button
                       onClick={() => setSelectedProductDetails(prod)}
                       disabled={isOutOfStock}
-                      className={`flex-1 py-3 md:py-4 rounded-xl md:rounded-2xl font-black text-[8px] md:text-[10px] transition-all flex items-center justify-center gap-2 md:gap-3 uppercase tracking-[0.1em] md:tracking-[0.2em] ${
+                      className={`flex-1 py-3 md:py-4 rounded-xl md:rounded-2xl font-bold text-xs transition-all flex items-center justify-center gap-2 md:gap-3 uppercase tracking-widest ${
                         isOutOfStock 
-                          ? 'bg-white/5 text-gray-600 cursor-not-allowed' 
-                          : 'pro-button pro-button-primary shadow-purple-600/20'
+                          ? 'bg-white/5 text-gray-600 cursor-not-allowed border border-white/5' 
+                          : 'bg-purple-600/30 backdrop-blur-xl text-purple-100/90 border border-purple-500/40 shadow-[0_0_20px_rgba(147,51,234,0.3)] hover:bg-purple-600/40 hover:text-white hover:border-purple-500/60'
                       }`}
                     >
                       DETALHES
