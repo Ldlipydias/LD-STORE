@@ -244,12 +244,12 @@ export default function Store({ user }: StoreProps) {
               className="group glass-card flex flex-col rounded-[2.5rem] overflow-hidden hover:border-purple-500/30 transition-all duration-500"
             >
               {/* Image Container */}
-              <div className="relative aspect-[4/3] overflow-hidden p-3">
+              <div className="relative aspect-[4/3] md:aspect-video overflow-hidden p-3">
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-10" />
                 <img
                   src={prod.imageUrl}
                   alt={prod.name}
-                  className="w-full h-full object-cover rounded-[1.8rem] bg-black/40 group-hover:scale-110 transition-transform duration-700"
+                  className="w-full h-full object-contain rounded-[1.8rem] bg-black/40 group-hover:scale-110 transition-transform duration-700"
                 />
                 
                 <div className="absolute top-6 right-6 flex flex-col gap-2 z-20">
