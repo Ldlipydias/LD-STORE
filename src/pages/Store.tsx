@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, query, where, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import { User } from 'firebase/auth';
+import { useParams } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
 import { ShoppingCart, Download, ExternalLink, Sparkles, Filter, Loader2, Copy, Check, QrCode, Clock, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -25,6 +26,7 @@ interface StoreProps {
 }
 
 export default function Store({ user }: StoreProps) {
+  const { id: urlProductId } = useParams();
   const [products, setProducts] = useState<any[]>([]);
   const [userOrders, setUserOrders] = useState<string[]>([]);
   const [userPendingOrders, setUserPendingOrders] = useState<string[]>([]);
@@ -78,7 +80,15 @@ export default function Store({ user }: StoreProps) {
     setLoading(true);
     try {
       const prods = await getDocs(query(collection(db, 'products'), orderBy('createdAt', 'desc')));
-      setProducts(prods.docs.map(d => ({ id: d.id, ...d.data() })));
+      const productsList = prods.docs.map(d => ({ id: d.id, ...d.data() }));
+      setProducts(productsList);
+
+      if (urlProductId) {
+        const productFromUrl = productsList.find(p => p.id === urlProductId);
+        if (productFromUrl) {
+          setSelectedProductDetails(productFromUrl);
+        }
+      }
 
       if (user) {
         const orders = await getDocs(query(
@@ -136,7 +146,9 @@ export default function Store({ user }: StoreProps) {
           productName: product.name,
           productPrice: product.price,
           userId: user.uid,
-          origin: window.location.origin
+          origin: window.location.origin,
+          appliedCoupon: product.appliedCoupon || null,
+          originalPrice: product.originalPrice || null
         }),
       });
 

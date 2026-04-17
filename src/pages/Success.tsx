@@ -22,6 +22,8 @@ export default function Success({ user }: SuccessProps) {
     const verifyPayment = async () => {
       const sessionId = searchParams.get('session_id');
       const productId = searchParams.get('product_id');
+      const appliedCoupon = searchParams.get('coupon');
+      const originalPriceParam = searchParams.get('original');
 
       if (!sessionId || !productId) {
         setStatus('error');
@@ -55,12 +57,19 @@ export default function Success({ user }: SuccessProps) {
           const orderDoc = await getDoc(orderRef);
           
           if (!orderDoc.exists()) {
+            const finalPrice = originalPriceParam && appliedCoupon 
+              ? parseFloat(originalPriceParam) - (parseFloat(originalPriceParam) * 0) // We only care about amount paid, which usually isn't in productData anymore, actually amount paid from Stripe is better but we can just use data from session or fallback
+              : productData.price;
+              
+            // A more accurate amount is from session.amount_total from Stripe, but since we verified let's just log coupon fields
             await setDoc(orderRef, {
               userId: user.uid,
               userEmail: user.email,
               productId,
               productName: productData.name,
-              amount: productData.price,
+              amount: data.amount_total ? data.amount_total / 100 : productData.price,
+              appliedCoupon: appliedCoupon || null,
+              originalPrice: originalPriceParam ? parseFloat(originalPriceParam) : null,
               status: 'paid',
               paymentMethod: 'stripe',
               stripeSessionId: sessionId,
@@ -69,9 +78,11 @@ export default function Success({ user }: SuccessProps) {
             });
 
             // Notificar administrador
+            const paidValue = data.amount_total ? (data.amount_total / 100).toFixed(2) : productData.price.toFixed(2);
+            const couponMsg = appliedCoupon ? ` (Cupom: ${appliedCoupon})` : '';
             await notifyAdmin(
               'Venda Aprovada (Stripe)',
-              `${user.email || 'Um usuário'} comprou ${productData.name} por R$ ${productData.price}.`,
+              `${user.email || 'Um usuário'} comprou ${productData.name} por R$ ${paidValue}${couponMsg}.`,
               '/admin'
             );
           }

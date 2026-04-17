@@ -66,6 +66,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Store user={user} />} />
             <Route path="/store" element={<Store user={user} />} />
+            <Route path="/product/:id" element={<Store user={user} />} />
             <Route path="/admin" element={isAdmin ? <Admin /> : <Navigate to="/" />} />
             <Route path="/success" element={<Success user={user} />} />
             <Route path="*" element={<Navigate to="/" />} />

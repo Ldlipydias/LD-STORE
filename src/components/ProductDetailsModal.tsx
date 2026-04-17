@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ShoppingBag, Plus, CheckCircle2, Zap, MessageSquare, Package, ShieldCheck } from 'lucide-react';
+import { X, ShoppingBag, Plus, CheckCircle2, Zap, MessageSquare, Package, ShieldCheck, Share2, Loader2, Tag } from 'lucide-react';
+import { db } from '../firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 interface ProductDetailsModalProps {
   isOpen: boolean;
@@ -13,15 +15,109 @@ interface ProductDetailsModalProps {
 export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, onPix }: ProductDetailsModalProps) {
   const [selectedOption, setSelectedOption] = useState(0);
   const [currentImage, setCurrentImage] = useState(product?.imageUrl);
+  
+  // Coupon state
+  const [couponCode, setCouponCode] = useState('');
+  const [activeCoupon, setActiveCoupon] = useState<any>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState('');
 
-  // Reset current image when product changes or modal opens
+  // Reset current image and coupon when product changes or modal opens
   useEffect(() => {
-    if (product) setCurrentImage(product.imageUrl);
+    if (product) {
+      setCurrentImage(product.imageUrl);
+    }
+    setCouponCode('');
+    setActiveCoupon(null);
+    setCouponError('');
   }, [product, isOpen]);
 
   if (!product) return null;
 
   const allImages = [product.imageUrl, ...(product.sampleImages || [])];
+
+  const handleShare = () => {
+    const url = `https://story.app.br/product/${product.id}`;
+    const text = `Olha esse produto: *${product.name}*\n\nGaranta já o seu! 🔥\n${url}`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    setCouponLoading(true);
+    setCouponError('');
+    
+    try {
+      // Find coupon ignoring case
+      const q = query(collection(db, 'coupons'), where('code', '==', couponCode.trim().toUpperCase()));
+      const snap = await getDocs(q);
+      
+      if (snap.empty) {
+        setCouponError('Cupom inválido ou não encontrado.');
+        setActiveCoupon(null);
+        return;
+      }
+
+      const couponData = snap.docs[0].data();
+      
+      // Check active
+      if (couponData.active === false) {
+        setCouponError('Este cupom está inativo.');
+        setActiveCoupon(null);
+        return;
+      }
+      
+      // Check minimum value
+      if (couponData.minAmount && product.price < couponData.minAmount) {
+        setCouponError(`Válido apenas para compras acima de R$ ${couponData.minAmount.toFixed(2)}.`);
+        setActiveCoupon(null);
+        return;
+      }
+
+      // Check validity date
+      if (couponData.validUntil) {
+        const validDate = new Date(couponData.validUntil);
+        const today = new Date();
+        // compare dates directly (ignoring time if we want, but simple compare is fine)
+        if (today > validDate) {
+          setCouponError('Este cupom já expirou.');
+          setActiveCoupon(null);
+          return;
+        }
+      }
+
+      setActiveCoupon({
+        ...couponData,
+        code: snap.docs[0].id
+      });
+    } catch (error) {
+      console.error('Error applying coupon', error);
+      setCouponError('Erro ao validar o cupom.');
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const currentPrice = activeCoupon ? Math.max(0, product.price * (1 - activeCoupon.discount / 100)) : product.price;
+
+  const handleBuyInternal = () => {
+    onBuy({ 
+      ...product, 
+      price: currentPrice, 
+      appliedCoupon: activeCoupon ? activeCoupon.code : null,
+      originalPrice: activeCoupon ? product.price : null
+    });
+  };
+
+  const handlePixInternal = () => {
+    onPix({ 
+      ...product, 
+      price: currentPrice, 
+      appliedCoupon: activeCoupon ? activeCoupon.code : null,
+      originalPrice: activeCoupon ? product.price : null
+    });
+  };
 
   return (
     <AnimatePresence>
@@ -71,13 +167,23 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, o
             <div className="p-8 space-y-8">
               {/* Header Info */}
               <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-purple-500/10 rounded-xl border border-purple-500/20">
-                    <Package className="w-5 h-5 text-purple-400" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-purple-500/10 rounded-xl border border-purple-500/20">
+                      <Package className="w-5 h-5 text-purple-400" />
+                    </div>
+                    <h2 className="text-2xl font-black tracking-tighter text-white uppercase flex items-center gap-3">
+                      <span>🎁</span> {product.name}
+                    </h2>
                   </div>
-                  <h2 className="text-2xl font-black tracking-tighter text-white uppercase flex items-center gap-3">
-                    <span>🎁</span> {product.name}
-                  </h2>
+                  <button 
+                    onClick={handleShare}
+                    className="p-2 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] rounded-xl border border-[#25D366]/20 transition-all flex items-center gap-2"
+                    title="Compartilhar no WhatsApp"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    <span className="text-[10px] uppercase font-black tracking-widest hidden sm:inline">Compartilhar</span>
+                  </button>
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -86,10 +192,61 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, o
                   </div>
                 </div>
 
-                <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-black text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.4)]">R$ {product.price.toFixed(2)}</span>
-                  <span className="text-sm text-gray-500 font-bold uppercase tracking-widest">À vista no Pix</span>
+                <div className="flex flex-col gap-1">
+                  {activeCoupon ? (
+                    <>
+                      <span className="text-sm text-gray-500 font-bold line-through">R$ {product.price.toFixed(2)}</span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-4xl font-black text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.4)]">R$ {currentPrice.toFixed(2)}</span>
+                        <span className="text-sm text-gray-500 font-bold uppercase tracking-widest">com desconto</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-4xl font-black text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.4)]">R$ {product.price.toFixed(2)}</span>
+                      <span className="text-sm text-gray-500 font-bold uppercase tracking-widest">À vista no Pix</span>
+                    </div>
+                  )}
                 </div>
+              </div>
+
+              {/* Coupon Section */}
+              <div className="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-gray-400">
+                  <Tag className="w-4 h-4" />
+                  Cupom de Desconto
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value)}
+                    placeholder="DIGITE AQUI"
+                    disabled={!!activeCoupon || couponLoading}
+                    className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-purple-500 text-sm font-bold uppercase"
+                  />
+                  {!activeCoupon ? (
+                    <button
+                      onClick={handleApplyCoupon}
+                      disabled={couponLoading || !couponCode.trim()}
+                      className="px-4 py-2 bg-purple-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-purple-500 disabled:opacity-50 flex items-center justify-center min-w-[80px]"
+                    >
+                      {couponLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'APLICAR'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setActiveCoupon(null);
+                        setCouponCode('');
+                      }}
+                      className="px-4 py-2 bg-red-500/20 text-red-500 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-red-500 hover:text-white"
+                    >
+                      REMOVER
+                    </button>
+                  )}
+                </div>
+                {couponError && <p className="text-xs text-red-400 font-bold mt-2">{couponError}</p>}
+                {activeCoupon && <p className="text-xs text-emerald-400 font-bold mt-2">Cupom '{activeCoupon.code}' aplicado! ({activeCoupon.discount}% OFF)</p>}
               </div>
 
               {/* Feedback Button */}
@@ -125,7 +282,7 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, o
               {/* Action Buttons */}
               <div className="space-y-4">
                 <button 
-                  onClick={() => onBuy(product)}
+                  onClick={handleBuyInternal}
                   className="w-full py-5 rounded-[1.5rem] bg-gradient-to-r from-purple-600 to-purple-400 text-white font-black text-sm flex items-center justify-center gap-3 shadow-xl shadow-purple-600/20 hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest"
                 >
                   <ShoppingBag className="w-5 h-5" />
@@ -133,7 +290,7 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, o
                 </button>
                 
                 <button 
-                  onClick={() => onPix(product)}
+                  onClick={handlePixInternal}
                   className="w-full py-5 rounded-[1.5rem] bg-white/5 border border-white/10 text-white font-black text-sm flex items-center justify-center gap-3 hover:bg-white/10 transition-all uppercase tracking-widest"
                 >
                   <svg fill="#24b394" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" className="w-5 h-5"><g id="SVGRepo_bgCarrier" strokeWidth="0"></g><g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g><g id="SVGRepo_iconCarrier"><path d="M11.917 11.71a2.046 2.046 0 0 1-1.454-.602l-2.1-2.1a.4.4 0 0 0-.551 0l-2.108 2.108a2.044 2.044 0 0 1-1.454.602h-.414l2.66 2.66c.83.83 2.177.83 3.007 0l2.667-2.668h-.253zM4.25 4.282c.55 0 1.066.214 1.454.602l2.108 2.108a.39.39 0 0 0 .552 0l2.1-2.1a2.044 2.044 0 0 1 1.453-.602h.253L9.503 1.623a2.127 2.127 0 0 0-3.007 0l-2.66 2.66h.414z"></path><path d="m14.377 6.496-1.612-1.612a.307.307 0 0 1-.114.023h-.733c-.379 0-.75.154-1.017.422l-2.1 2.1a1.005 1.005 0 0 1-1.425 0L5.268 5.32a1.448 1.448 0 0 0-1.018-.422h-.9a.306.306 0 0 1-.109-.021L1.623 6.496c-.83.83-.83 2.177 0 3.008l1.618 1.618a.305.305 0 0 1 .108-.022h.901c.38 0 .75-.153 1.018-.421L7.375 8.57a1.034 1.034 0 0 1 1.426 0l2.1 2.1c.267.268.638.421 1.017.421h.733c.04 0 .079.01.114.024l1.612-1.612c.83-.83.83-2.178 0-3.008z"></path></g></svg>

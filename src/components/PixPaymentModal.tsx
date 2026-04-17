@@ -52,6 +52,8 @@ export default function PixPaymentModal({ isOpen, onClose, product, userId, user
         productId: product.id,
         productName: product.name,
         price: product.price,
+        appliedCoupon: product.appliedCoupon || null,
+        originalPrice: product.originalPrice || null,
         status: 'pending',
         paymentMethod: 'pix',
         receiptUrl,

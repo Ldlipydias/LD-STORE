@@ -218,10 +218,15 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
 
 app.post('/api/create-checkout-session', async (req, res) => {
   try {
-    const { productId, productName, productPrice, userId, origin } = req.body;
+    const { productId, productName, productPrice, userId, origin, appliedCoupon, originalPrice } = req.body;
 
     if (!process.env.STRIPE_SECRET_KEY) {
       throw new Error('STRIPE_SECRET_KEY não configurada no servidor.');
+    }
+
+    let successUrlStr = `${origin}/success?session_id={CHECKOUT_SESSION_ID}&product_id=${productId}`;
+    if (appliedCoupon) {
+      successUrlStr += `&coupon=${encodeURIComponent(appliedCoupon)}&original=${encodeURIComponent(originalPrice)}`;
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -239,7 +244,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
         },
       ],
       mode: 'payment',
-      success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}&product_id=${productId}`,
+      success_url: successUrlStr,
       cancel_url: `${origin}/store`,
       metadata: {
         productId,
@@ -258,7 +263,7 @@ app.get('/api/verify-session/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
     const session = await stripe.checkout.sessions.retrieve(sessionId);
-    res.json({ status: session.payment_status });
+    res.json({ status: session.payment_status, amount_total: session.amount_total });
   } catch (error: any) {
     console.error('Stripe Verification Error:', error);
     res.status(500).json({ error: error.message });

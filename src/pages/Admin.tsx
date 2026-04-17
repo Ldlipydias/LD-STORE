@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, setDoc, getDoc, onSnapshot, where, Timestamp } from 'firebase/firestore';
 import { uploadToImgBB } from '../services/imgbb';
-import { Plus, Trash2, Image as ImageIcon, Loader2, Lock, Edit2, X, Sparkles, Check, XCircle, ExternalLink, Bell, MessageSquare, Users, Send, ShoppingBag, Mail, Activity, ShieldCheck } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, Loader2, Lock, Edit2, X, Sparkles, Check, XCircle, ExternalLink, Bell, MessageSquare, Users, Send, ShoppingBag, Mail, Activity, ShieldCheck, Tag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Admin() {
@@ -22,9 +22,11 @@ export default function Admin() {
   const [replying, setReplying] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
   const [testEmailResult, setTestEmailResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'orders' | 'support' | 'products' | 'settings' | 'users' | 'banners'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'support' | 'products' | 'settings' | 'users' | 'banners' | 'coupons'>('orders');
   const [users, setUsers] = useState<any[]>([]);
   const [allOrders, setAllOrders] = useState<any[]>([]);
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [couponForm, setCouponForm] = useState({ code: '', discount: '', minAmount: '', validUntil: '' });
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [messageModal, setMessageModal] = useState<{ show: boolean; user: any; subject: string; body: string } | null>(null);
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -326,6 +328,13 @@ export default function Admin() {
 
     const ordersSnap = await getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc')));
     setAllOrders(ordersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    
+    try {
+      const couponsSnap = await getDocs(query(collection(db, 'coupons')));
+      setCoupons(couponsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch(err) {
+      console.warn("Could not fetch coupons, maybe missing?", err);
+    }
   };
 
   const fetchPixSettings = async () => {
@@ -539,6 +548,36 @@ export default function Admin() {
       fetchData();
     } catch (error) {
       console.error(error);
+    }
+  };
+
+  const handleAddCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!couponForm.code || !couponForm.discount) return;
+    
+    setLoading(true);
+    try {
+      const parsedDiscount = parseFloat(couponForm.discount);
+      const parsedMinAmount = couponForm.minAmount ? parseFloat(couponForm.minAmount) : 0;
+      
+      const newCoupon = {
+        code: couponForm.code.toUpperCase().trim(),
+        discount: parsedDiscount,
+        minAmount: parsedMinAmount,
+        validUntil: couponForm.validUntil || null,
+        active: true,
+        createdAt: new Date().toISOString()
+      };
+      
+      await addDoc(collection(db, 'coupons'), newCoupon);
+      setCouponForm({ code: '', discount: '', minAmount: '', validUntil: '' });
+      fetchData();
+      alert('Cupom criado com sucesso!');
+    } catch (error: any) {
+      console.error(error);
+      alert('Erro ao criar cupom: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -791,8 +830,8 @@ export default function Admin() {
     e.preventDefault();
     if (!messageModal || !messageModal.body.trim()) return;
     setSendingMessage(true);
-    if (!messageModal.user?.email) {
-      alert('Erro: Este usuário não possui um e-mail cadastrado.');
+    if (!messageModal.user?.email || messageModal.user.email.includes('(Usuário sem e-mail')) {
+      alert('Aviso: Este cliente fez login e comprou, mas a conta do Google dele não forneceu um e-mail público (provavelmente foi criada com número de telefone). Por isso, não é possível enviar uma mensagem para ele.');
       setSendingMessage(false);
       return;
     }
@@ -1165,6 +1204,7 @@ export default function Admin() {
             { id: 'users', label: 'Clientes', icon: Users, count: users.length },
             { id: 'support', label: 'Suporte', icon: MessageSquare, count: supportTickets.filter(t => t.unreadByAdmin).length },
             { id: 'products', label: 'Produtos', icon: ImageIcon },
+            { id: 'coupons', label: 'Cupons', icon: Tag },
             { id: 'banners', label: 'Banners', icon: ImageIcon },
             { id: 'settings', label: 'Ajustes', icon: Activity }
           ].map((tab) => (
@@ -1217,16 +1257,27 @@ export default function Admin() {
                     <div className="space-y-1">
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Produto</p>
                       <h3 className="font-bold text-lg leading-tight">{order.productName}</h3>
+                      {order.appliedCoupon && (
+                        <span className="inline-flex mt-2 items-center gap-1 px-2 py-1 rounded bg-purple-500/20 text-purple-400 text-[10px] font-bold uppercase tracking-widest border border-purple-500/20">
+                          <Tag className="w-3 h-3" />
+                          CUPOM: {order.appliedCoupon}
+                        </span>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Valor</p>
                       <p className="text-emerald-400 font-black">$ {(order.price || order.amount || 0).toFixed(2)}</p>
+                      {order.originalPrice && (
+                        <p className="text-[10px] text-gray-500 line-through">
+                          R$ {Number(order.originalPrice).toFixed(2)}
+                        </p>
+                      )}
                     </div>
                   </div>
 
                   <div className="space-y-1">
                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Cliente</p>
-                    <p className="text-sm text-gray-300 font-medium break-all">{order.userEmail}</p>
+                    <p className="text-sm text-gray-300 font-medium break-all">{order.userEmail || '(Usuário sem e-mail)'}</p>
                   </div>
 
                   <div className="space-y-2">
@@ -1339,7 +1390,7 @@ export default function Admin() {
                           </span>
                         )}
                       </div>
-                    <p className="font-bold text-sm line-clamp-1">{ticket.userEmail}</p>
+                    <p className="font-bold text-sm line-clamp-1">{ticket.userEmail || '(Usuário sem e-mail)'}</p>
                     <p className="text-xs text-gray-500 mt-1 line-clamp-1">Pedido: {ticket.orderId}</p>
                     <p className="text-xs text-gray-400 mt-2 line-clamp-2">
                       {ticket.messages[ticket.messages.length - 1]?.text}
@@ -1356,7 +1407,7 @@ export default function Admin() {
                   {/* Chat Header */}
                   <div className="p-4 border-b border-white/10 bg-black/20 flex items-center justify-between">
                     <div>
-                      <p className="font-bold">{selectedTicket.userEmail}</p>
+                      <p className="font-bold">{selectedTicket.userEmail || '(Usuário sem e-mail)'}</p>
                       <p className="text-xs text-gray-500">Pedido: {selectedTicket.orderId}</p>
                     </div>
                       <div className="flex items-center gap-2">
@@ -1775,6 +1826,85 @@ export default function Admin() {
         </div>
         )}
 
+        {/* Coupons Section */}
+        {activeTab === 'coupons' && (
+          <div className="space-y-12">
+            <div className="space-y-6">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Tag className="w-5 h-5 text-purple-400" />
+                Novo Cupom de Desconto
+              </h2>
+              <form onSubmit={handleAddCoupon} className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6 rounded-3xl bg-white/5 border border-white/10">
+                <input
+                  type="text"
+                  value={couponForm.code}
+                  onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
+                  placeholder="CÓDIGO (ex: NATAL10)"
+                  required
+                  className="w-full px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none uppercase"
+                />
+                <input
+                  type="number"
+                  value={couponForm.discount}
+                  onChange={(e) => setCouponForm({ ...couponForm, discount: e.target.value })}
+                  placeholder="Desconto (%)"
+                  required
+                  min="1"
+                  max="100"
+                  className="w-full px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none"
+                />
+                <input
+                  type="number"
+                  value={couponForm.minAmount}
+                  onChange={(e) => setCouponForm({ ...couponForm, minAmount: e.target.value })}
+                  placeholder="Valor Mín. Compra (R$)"
+                  min="0"
+                  className="w-full px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none"
+                />
+                <input
+                  type="date"
+                  value={couponForm.validUntil}
+                  onChange={(e) => setCouponForm({ ...couponForm, validUntil: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="md:col-span-4 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-purple-400 text-white font-bold hover:scale-[1.02] transition-transform w-full disabled:opacity-50"
+                >
+                  {loading ? 'CRIANDO...' : 'CRIAR CUPOM'}
+                </button>
+              </form>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {coupons.map((coupon) => (
+                <div key={coupon.id} className="p-6 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="font-bold text-lg">{coupon.code}</p>
+                    <p className="text-xs text-gray-400">
+                      -{coupon.discount}% válido para compras acima de R$ {coupon.minAmount.toFixed(2)}
+                      {coupon.validUntil && ` • Até ${new Date(coupon.validUntil).toLocaleDateString()}`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleDelete('coupons', coupon.id)}
+                    className="p-3 text-red-500 hover:bg-red-500/10 rounded-xl transition-colors"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </div>
+              ))}
+              {coupons.length === 0 && (
+                <div className="p-12 text-center text-gray-500">
+                  <Tag className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p>Nenhum cupom cadastrado.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Banners Section */}
         {activeTab === 'banners' && (
           <div className="space-y-8">
@@ -1879,7 +2009,7 @@ export default function Admin() {
                         <Users className="w-6 h-6 text-purple-400" />
                       </div>
                       <div>
-                        <p className="font-black text-lg leading-tight">{user.email}</p>
+                        <p className="font-black text-lg leading-tight">{user.email || '(Usuário sem e-mail público)'}</p>
                         <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">
                           Desde: {new Date(user.createdAt).toLocaleDateString()} • ID: {user.id.substring(0, 8)}
                         </p>
@@ -1895,19 +2025,29 @@ export default function Admin() {
                         <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Total Gasto</p>
                         <p className="font-black text-emerald-400">$ {totalSpent.toFixed(2)}</p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => setSelectedUser(selectedUser?.id === user.id ? null : user)}
                           className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
                         >
                           {selectedUser?.id === user.id ? 'FECHAR HISTÓRICO' : 'VER HISTÓRICO'}
                         </button>
+                        {user.email && !user.email.includes('(Usuário sem') && (
+                          <a
+                            href={`mailto:${user.email}`}
+                            className="px-4 py-2 rounded-xl bg-white/10 text-white text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all flex items-center gap-2 border border-white/20"
+                            title="Abrir no seu serviço de e-mail (Gmail, Outlook, etc)"
+                          >
+                            <Mail className="w-3 h-3" />
+                            GMAIL/EMAIL
+                          </a>
+                        )}
                         <button
                           onClick={() => setMessageModal({ show: true, user, subject: '', body: '' })}
                           className="px-4 py-2 rounded-xl bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-purple-500 transition-all flex items-center gap-2"
                         >
                           <Mail className="w-3 h-3" />
-                          MENSAGEM
+                          MENSAGEM AQUI
                         </button>
                       </div>
                     </div>
@@ -1926,16 +2066,29 @@ export default function Admin() {
                             {userOrders.map(order => (
                               <div key={order.id} className="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-2">
                                 <div className="flex justify-between items-start">
-                                  <p className="font-bold text-sm">{order.productName}</p>
+                                  <div className="space-y-1">
+                                    <p className="font-bold text-sm">{order.productName}</p>
+                                    {order.appliedCoupon && (
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 text-[8px] font-bold uppercase tracking-widest border border-purple-500/20">
+                                        <Tag className="w-2.5 h-2.5" />
+                                        CUPOM: {order.appliedCoupon}
+                                      </span>
+                                    )}
+                                  </div>
                                   <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${
                                     order.status === 'paid' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
                                   }`}>
-                                    {order.status}
+                                    {order.status === 'paid' ? 'PAGO' : 'PENDENTE'}
                                   </span>
                                 </div>
                                 <div className="flex justify-between items-end">
                                   <p className="text-xs text-gray-500">{new Date(order.createdAt).toLocaleDateString()}</p>
-                                  <p className="font-black text-white text-sm">$ {(order.price || order.amount || 0).toFixed(2)}</p>
+                                  <div className="text-right">
+                                    <p className="font-black text-white text-sm">$ {(order.price || order.amount || 0).toFixed(2)}</p>
+                                    {order.originalPrice && (
+                                      <p className="text-[10px] text-gray-500 line-through">R$ {Number(order.originalPrice).toFixed(2)}</p>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             ))}
