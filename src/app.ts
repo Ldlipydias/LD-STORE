@@ -214,15 +214,24 @@ app.post('/api/send-support-email', async (req, res) => {
   }
 });
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+let stripeClient: Stripe | null = null;
+
+function getStripe(): Stripe {
+  if (!stripeClient) {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) {
+      throw new Error('STRIPE_SECRET_KEY environment variable is required');
+    }
+    stripeClient = new Stripe(key);
+  }
+  return stripeClient;
+}
 
 app.post('/api/create-checkout-session', async (req, res) => {
   try {
     const { productId, productName, productPrice, userId, origin, appliedCoupon, originalPrice } = req.body;
 
-    if (!process.env.STRIPE_SECRET_KEY) {
-      throw new Error('STRIPE_SECRET_KEY não configurada no servidor.');
-    }
+    const stripe = getStripe();
 
     let successUrlStr = `${origin}/success?session_id={CHECKOUT_SESSION_ID}&product_id=${productId}`;
     if (appliedCoupon) {
@@ -261,6 +270,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
 
 app.get('/api/verify-session/:sessionId', async (req, res) => {
   try {
+    const stripe = getStripe();
     const { sessionId } = req.params;
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     res.json({ status: session.payment_status, amount_total: session.amount_total });

@@ -22,7 +22,7 @@ export default function Admin() {
   const [replying, setReplying] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
   const [testEmailResult, setTestEmailResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'orders' | 'support' | 'products' | 'settings' | 'users' | 'banners' | 'coupons'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'support' | 'products' | 'settings' | 'users' | 'banners' | 'coupons' | 'destaques'>('orders');
   const [users, setUsers] = useState<any[]>([]);
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [coupons, setCoupons] = useState<any[]>([]);
@@ -41,6 +41,10 @@ export default function Admin() {
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
   const [banners, setBanners] = useState<string[]>([]);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+  
+  // Top Buyers State
+  const [topBuyers, setTopBuyers] = useState<{ name: string; username: string }[]>([]);
+  const [buyerForm, setBuyerForm] = useState({ name: '', username: '' });
 
   useEffect(() => {
     if (typeof Notification !== 'undefined') {
@@ -242,7 +246,7 @@ export default function Admin() {
         });
 
         setPendingOrders(orders);
-      });
+      }, (err) => console.error("Admin orders snap:", err));
 
       // Listen for support tickets
       const supportQ = query(
@@ -290,7 +294,7 @@ export default function Admin() {
             }
           }
         });
-      });
+      }, (err) => console.error("Admin support snap:", err));
 
       // Listen for support queue count
       const unsubscribeQueue = onSnapshot(doc(db, 'settings', 'support'), (docSnap) => {
@@ -299,7 +303,7 @@ export default function Admin() {
         } else {
           setDoc(doc(db, 'settings', 'support'), { virtualQueueCount: 110 });
         }
-      });
+      }, (err) => console.error("Admin queue snap:", err));
 
       // Listen for banners
       const unsubscribeBanners = onSnapshot(doc(db, 'settings', 'banners'), (docSnap) => {
@@ -308,13 +312,23 @@ export default function Admin() {
         } else {
           setDoc(doc(db, 'settings', 'banners'), { images: [] });
         }
-      });
+      }, (err) => console.error("Admin banners snap:", err));
+
+      // Listen for Top Buyers (Wall of Fame)
+      const unsubscribeTopBuyers = onSnapshot(doc(db, 'settings', 'wallOfFame'), (docSnap) => {
+        if (docSnap.exists() && docSnap.data().list) {
+          setTopBuyers(docSnap.data().list);
+        } else {
+          setDoc(doc(db, 'settings', 'wallOfFame'), { list: [] });
+        }
+      }, (err) => console.error("Admin top buyers snap:", err));
 
       return () => {
         unsubscribe();
         unsubscribeSupport();
         unsubscribeQueue();
         unsubscribeBanners();
+        unsubscribeTopBuyers();
       };
     }
   }, [isAuthorized]);
@@ -592,8 +606,27 @@ export default function Admin() {
         approvedAt: new Date().toISOString()
       });
 
-      // 2. Decrease stock
-      if (order.productId) {
+      let addedBalance = false;
+
+      // Handle wallet topup vs digital product
+      if (order.isWalletTopup || order.productId === 'wallet_topup') {
+        if (!order.userId) throw new Error("ID do usuário está ausente neste pedido.");
+        
+        const userRef = doc(db, 'users', order.userId);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const currentBalance = parseFloat(userSnap.data().balance || '0');
+          const amountToAdd = parseFloat(order.price || order.amount || '0');
+          
+          if (isNaN(amountToAdd)) throw new Error("Valor do pedido inválido.");
+          
+          await updateDoc(userRef, { balance: currentBalance + amountToAdd });
+          addedBalance = true;
+        } else {
+          throw new Error("Conta de usuário destino não encontrada no bando de dados.");
+        }
+      } else if (order.productId) {
+        // 2. Decrease stock for digital products
         const productDoc = await getDoc(doc(db, 'products', order.productId));
         if (productDoc.exists()) {
           const currentStock = productDoc.data().stock || 0;
@@ -603,7 +636,7 @@ export default function Admin() {
         }
       }
 
-      alert('Produto liberado com sucesso!');
+      alert(addedBalance ? `Saldo de R$ ${parseFloat(order.price || order.amount || 0).toFixed(2)} liberado na carteira do usuário com sucesso!` : 'Produto liberado com sucesso!');
       
       // Send email notification about approval
       if (order.userEmail) {
@@ -1206,6 +1239,7 @@ export default function Admin() {
             { id: 'products', label: 'Produtos', icon: ImageIcon },
             { id: 'coupons', label: 'Cupons', icon: Tag },
             { id: 'banners', label: 'Banners', icon: ImageIcon },
+            { id: 'destaques', label: 'Destaques', icon: Sparkles },
             { id: 'settings', label: 'Ajustes', icon: Activity }
           ].map((tab) => (
             <button
@@ -1411,6 +1445,72 @@ export default function Admin() {
                       <p className="text-xs text-gray-500">Pedido: {selectedTicket.orderId}</p>
                     </div>
                       <div className="flex items-center gap-2">
+                        {selectedTicket.type === 'refund' && selectedTicket.status === 'open' && (
+                          <>
+                            <button
+                              onClick={async () => {
+                                if (!window.confirm('Tem certeza que deseja NEGAR o reembolso? O ticket será respondido e encerrado.')) return;
+                                const reason = window.prompt("Motivo da recusa (opcional):", "Não atende aos critérios de reembolso.");
+                                if (reason === null) return;
+                                try {
+                                  await updateDoc(doc(db, 'support_tickets', selectedTicket.id), {
+                                    status: 'resolved',
+                                    messages: [...(selectedTicket.messages || []), {
+                                      id: Date.now().toString(),
+                                      sender: 'admin',
+                                      text: `❌ SUA SOLICITAÇÃO FOI NEGADA.\nMotivo: ${reason}`,
+                                      createdAt: new Date().toISOString()
+                                    }]
+                                  });
+                                  alert('Reembolso negado com sucesso!');
+                                  setSelectedTicket(null);
+                                } catch(e:any) {
+                                  alert("Erro: " + e.message);
+                                }
+                              }}
+                              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 text-red-500 text-xs font-bold hover:bg-red-500 hover:text-white transition-colors"
+                            >
+                              NEGAR
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (!window.confirm('Tem certeza que deseja REEMBOLSAR este cliente? O valor será adicionado no saldo e o ticket será farto como resolvido.')) return;
+                                // Need to fetch original order amount, since we have the order id, but wait, orderId is manually typed by user. We should trust the order.
+                                // Let's ask for the amount visually or fetch the order
+                                const refundAmountStr = window.prompt("Insira o valor em R$ para reembolsar à carteira do cliente:", "10.00");
+                                if (!refundAmountStr) return;
+                                const amount = parseFloat(refundAmountStr.replace(',', '.'));
+                                if (isNaN(amount) || amount <= 0) return;
+
+                                try {
+                                  const userRef = doc(db, 'users', selectedTicket.userId);
+                                  const userSnap = await getDoc(userRef);
+                                  if (userSnap.exists()) {
+                                    const currentBalance = userSnap.data().balance || 0;
+                                    await setDoc(userRef, { balance: currentBalance + amount }, { merge: true });
+                                  }
+                                  
+                                  await updateDoc(doc(db, 'support_tickets', selectedTicket.id), {
+                                    status: 'resolved',
+                                    messages: [...(selectedTicket.messages || []), {
+                                      id: Date.now().toString(),
+                                      sender: 'admin',
+                                      text: `✅ SUA SOLICITAÇÃO FOI APROVADA! O reembolso de R$ ${amount.toFixed(2)} foi creditado na sua carteira.`,
+                                      createdAt: new Date().toISOString()
+                                    }]
+                                  });
+                                  alert('Reembolso processado com sucesso!');
+                                  setSelectedTicket(null);
+                                } catch(e:any) {
+                                  alert("Erro: " + e.message);
+                                }
+                              }}
+                              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500/10 text-orange-500 text-xs font-bold hover:bg-orange-500 hover:text-white transition-colors"
+                            >
+                              APROVAR REEMBOLSO
+                            </button>
+                          </>
+                        )}
                         <button
                           onClick={() => setShowDeliverModal(true)}
                           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-500/10 text-purple-500 text-xs font-bold hover:bg-purple-500 hover:text-black transition-colors"
@@ -2102,6 +2202,93 @@ export default function Admin() {
             </div>
           </div>
         )}
+        {activeTab === 'destaques' && (
+          <div className="space-y-8">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-black flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-purple-500/20">
+                  <Sparkles className="w-6 h-6 text-purple-500" />
+                </div>
+                DESTAQUES DO MÊS
+              </h2>
+              <div className="flex items-center gap-4 bg-white/5 p-2 rounded-xl border border-white/10">
+                <span className="text-xs font-bold text-gray-400 uppercase px-4">{topBuyers.length} USUÁRIOS</span>
+              </div>
+            </div>
+
+            <div className="p-8 rounded-3xl bg-white/5 border border-white/10 space-y-6">
+              <p className="text-gray-400 text-sm">
+                Adicione usuários fictícios ou reais para aparecerem na tela inicial como os compradores destaque do mês.
+              </p>
+
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                if (!buyerForm.name) return;
+                const buyerData = { name: buyerForm.name, username: buyerForm.username };
+                const newList = [...topBuyers, buyerData];
+                await setDoc(doc(db, 'settings', 'wallOfFame'), { list: newList });
+                setBuyerForm({ name: '', username: '' });
+              }} className="flex flex-col md:flex-row gap-4 items-end">
+                <div className="flex-1 space-y-2 w-full">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-4">Nome</label>
+                  <input
+                    type="text"
+                    value={buyerForm.name}
+                    onChange={(e) => setBuyerForm({ ...buyerForm, name: e.target.value })}
+                    className="w-full px-6 py-4 rounded-2xl bg-black border border-white/10 focus:border-purple-500 outline-none transition-colors"
+                    placeholder="Ex: João Silva"
+                    required
+                  />
+                </div>
+                <div className="flex-1 space-y-2 w-full">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-4">Nome de Usuário (Opcional)</label>
+                  <input
+                    type="text"
+                    value={buyerForm.username}
+                    onChange={(e) => setBuyerForm({ ...buyerForm, username: e.target.value })}
+                    className="w-full px-6 py-4 rounded-2xl bg-black border border-white/10 focus:border-purple-500 outline-none transition-colors"
+                    placeholder="Ex: @joaosilva"
+                  />
+                </div>
+                <button type="submit" className="pro-button pro-button-primary px-8 py-4 w-full md:w-auto h-[58px]">
+                  <Plus className="w-5 h-5 mx-auto" />
+                </button>
+              </form>
+              
+              <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                {topBuyers.map((buyer, idx) => (
+                  <div key={idx} className="p-6 rounded-2xl bg-black/40 border border-white/5 flex items-center justify-between group">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-400 to-amber-600 flex items-center justify-center">
+                        <Sparkles className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-white">{buyer.name}</p>
+                        {buyer.username && <p className="text-[10px] text-gray-500 uppercase tracking-widest">{buyer.username}</p>}
+                      </div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const newList = topBuyers.filter((_, i) => i !== idx);
+                        await setDoc(doc(db, 'settings', 'wallOfFame'), { list: newList });
+                      }}
+                      className="p-2 bg-red-500/10 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                
+                {topBuyers.length === 0 && (
+                  <div className="col-span-full py-12 text-center text-gray-500 italic">
+                    Nenhum destaque adicionado ainda.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

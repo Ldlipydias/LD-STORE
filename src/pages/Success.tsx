@@ -43,46 +43,67 @@ export default function Success({ user }: SuccessProps) {
         const data = await response.json();
 
         if (data.status === 'complete' || data.status === 'paid') {
-          // 2. Get product details
-          const productDoc = await getDoc(doc(db, 'products', productId));
-          if (!productDoc.exists()) {
-            throw new Error('Produto não encontrado');
+          let expectedName = '';
+          let expectedPrice = 0;
+          let isWalletTopup = false;
+
+          if (productId === 'wallet_topup') {
+            isWalletTopup = true;
+            expectedName = 'Adição de Saldo na Carteira';
+            expectedPrice = data.amount_total ? data.amount_total / 100 : 0;
+            setProduct({ name: expectedName, id: 'wallet_topup', isWalletTopup: true, amount: expectedPrice });
+          } else {
+            // 2. Get product details
+            const productDoc = await getDoc(doc(db, 'products', productId));
+            if (!productDoc.exists()) {
+              throw new Error('Produto não encontrado');
+            }
+            
+            const productData = productDoc.data();
+            expectedName = productData.name;
+            expectedPrice = productData.price;
+            setProduct(productData);
           }
-          
-          const productData = productDoc.data();
-          setProduct(productData);
 
           // 3. Save order to Firestore
           const orderRef = doc(db, 'orders', sessionId);
           const orderDoc = await getDoc(orderRef);
           
           if (!orderDoc.exists()) {
-            const finalPrice = originalPriceParam && appliedCoupon 
-              ? parseFloat(originalPriceParam) - (parseFloat(originalPriceParam) * 0) // We only care about amount paid, which usually isn't in productData anymore, actually amount paid from Stripe is better but we can just use data from session or fallback
-              : productData.price;
-              
-            // A more accurate amount is from session.amount_total from Stripe, but since we verified let's just log coupon fields
+            const finalPrice = data.amount_total ? data.amount_total / 100 : expectedPrice;
+            
             await setDoc(orderRef, {
               userId: user.uid,
               userEmail: user.email,
               productId,
-              productName: productData.name,
-              amount: data.amount_total ? data.amount_total / 100 : productData.price,
+              productName: expectedName,
+              amount: finalPrice,
               appliedCoupon: appliedCoupon || null,
               originalPrice: originalPriceParam ? parseFloat(originalPriceParam) : null,
               status: 'paid',
               paymentMethod: 'stripe',
               stripeSessionId: sessionId,
               createdAt: new Date().toISOString(),
-              approvedAt: new Date().toISOString()
+              approvedAt: new Date().toISOString(),
+              isWalletTopup
             });
 
+            // If Wallet Topup, update user balance
+            if (isWalletTopup) {
+              const userRef = doc(db, 'users', user.uid);
+              const userSnap = await getDoc(userRef);
+              if (userSnap.exists()) {
+                const currentBalance = userSnap.data().balance || 0;
+                await setDoc(userRef, { balance: currentBalance + finalPrice }, { merge: true });
+              }
+            }
+
             // Notificar administrador
-            const paidValue = data.amount_total ? (data.amount_total / 100).toFixed(2) : productData.price.toFixed(2);
+            const paidValue = finalPrice.toFixed(2);
             const couponMsg = appliedCoupon ? ` (Cupom: ${appliedCoupon})` : '';
             await notifyAdmin(
-              'Venda Aprovada (Stripe)',
-              `${user.email || 'Um usuário'} comprou ${productData.name} por R$ ${paidValue}${couponMsg}.`,
+              isWalletTopup ? 'Adição de Saldo (Stripe)' : 'Venda Aprovada (Stripe)',
+              `${user.email || 'Um usuário'} ${isWalletTopup ? 'adicionou' : 'comprou'} ${expectedName} por R$ ${paidValue}${couponMsg}.`,
               '/admin'
             );
           }

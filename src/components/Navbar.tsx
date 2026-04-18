@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { User } from 'firebase/auth';
-import { logout, loginWithGoogle } from '../firebase';
-import { LogOut, Store, LayoutDashboard, BadgeCheck, Download, LogIn } from 'lucide-react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db, logout, loginWithGoogle } from '../firebase';
+import { LogOut, Store, LayoutDashboard, BadgeCheck, Download, LogIn, Wallet, ShoppingCart } from 'lucide-react';
 import metadata from '../../metadata.json';
 
 interface NavbarProps {
@@ -14,6 +15,8 @@ export default function Navbar({ user, isAdmin }: NavbarProps) {
   const navigate = useNavigate();
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallBtn, setShowInstallBtn] = useState(false);
+  const [balance, setBalance] = useState(0);
+  const [cartItemsCount, setCartItemsCount] = useState(0);
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -28,6 +31,41 @@ export default function Navbar({ user, isAdmin }: NavbarProps) {
       window.removeEventListener('beforeinstallprompt', handler);
     };
   }, []);
+
+  useEffect(() => {
+    // Make sure we have the initial cart state
+    const loadCart = () => {
+      const items = localStorage.getItem('ld_cart');
+      if (items) {
+        setCartItemsCount(JSON.parse(items).length);
+      } else {
+        setCartItemsCount(0);
+      }
+    };
+    loadCart();
+
+    // Listen for cart updates
+    const handleCartUpdate = () => loadCart();
+    window.addEventListener('cart_updated', handleCartUpdate);
+
+    return () => {
+      window.removeEventListener('cart_updated', handleCartUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setBalance(0);
+      return;
+    }
+    const unsub = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+      if (docSnap.exists() && docSnap.data().balance !== undefined) {
+        setBalance(docSnap.data().balance || 0);
+      }
+    }, (err) => console.error("Navbar balance snap error:", err));
+
+    return () => unsub();
+  }, [user]);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
@@ -72,7 +110,7 @@ export default function Navbar({ user, isAdmin }: NavbarProps) {
           </div>
         </Link>
 
-        <div className="flex items-center gap-8">
+        <div className="flex items-center gap-4 sm:gap-8">
           {showInstallBtn && (
             <button
               onClick={handleInstallClick}
@@ -85,11 +123,32 @@ export default function Navbar({ user, isAdmin }: NavbarProps) {
 
           {user ? (
             <>
-              <div className="flex items-center gap-4 md:gap-8">
+              <div className="flex items-center gap-4 md:gap-6">
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('open_cart'))}
+                  className="relative flex items-center gap-2 px-3 py-2 rounded-xl bg-black/60 border border-white/10 hover:bg-black transition-all group"
+                >
+                  <ShoppingCart className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" />
+                  {cartItemsCount > 0 && (
+                    <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-black border-2 border-black">
+                      {cartItemsCount}
+                    </div>
+                  )}
+                </button>
+
+                <button 
+                  onClick={() => navigate('/wallet')}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 hover:bg-purple-500/20 transition-all font-black text-xs"
+                >
+                  <Wallet className="w-4 h-4" />
+                  <span className="hidden sm:inline">Saldo:</span> R$ {balance.toFixed(2)}
+                </button>
+                <div className="h-6 w-px bg-white/10 hidden sm:block" />
+
                 {isAdmin && (
                   <Link to="/admin" className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-white hover:text-purple-300 transition-all hover:translate-y-[-1px] bg-purple-500/20 md:bg-transparent px-3 py-2 md:p-0 rounded-lg">
                     <LayoutDashboard className="w-5 h-5 md:w-4 md:h-4 text-purple-400" />
-                    <span className="hidden md:inline">ADMINISTRAÇÃO</span>
+                    <span className="hidden md:inline">ADMIN</span>
                   </Link>
                 )}
               </div>

@@ -57,6 +57,7 @@ export default function PixPaymentModal({ isOpen, onClose, product, userId, user
         status: 'pending',
         paymentMethod: 'pix',
         receiptUrl,
+        isWalletTopup: product.id === 'wallet_topup',
         createdAt: new Date().toISOString()
       });
 

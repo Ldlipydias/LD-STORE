@@ -7,21 +7,34 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { useEffect, useState } from 'react';
 import { auth, db } from './firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
 // Pages
 import Home from './pages/Home';
 import Store from './pages/Store';
 import Admin from './pages/Admin';
 import Success from './pages/Success';
+import WalletPage from './pages/Wallet';
 import Navbar from './components/Navbar';
+import CartDrawer from './components/CartDrawer';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [balance, setBalance] = useState(0);
+  const [isCartOpen, setIsCartOpen] = useState(false);
 
   useEffect(() => {
+    const handleOpenCart = () => setIsCartOpen(true);
+    window.addEventListener('open_cart', handleOpenCart);
+    return () => window.removeEventListener('open_cart', handleOpenCart);
+  }, []);
+
+  useEffect(() => {
+    let unsubBalance: (() => void) | null = null;
+    let isMounted = true;
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUser(user);
@@ -33,6 +46,9 @@ export default function App() {
         // Sync user to Firestore
         const userRef = doc(db, 'users', user.uid);
         const userSnap = await getDoc(userRef);
+        
+        if (!isMounted) return;
+
         if (!userSnap.exists()) {
           await setDoc(userRef, {
             email: user.email,
@@ -40,14 +56,40 @@ export default function App() {
             createdAt: new Date().toISOString()
           });
         }
+        
+        if (!isMounted) return;
+
+        // Clean up previous listener if it exists
+        if (unsubBalance) unsubBalance();
+
+        // Listen for balance updates
+        unsubBalance = onSnapshot(userRef, (snap) => {
+          if (snap.exists() && snap.data().balance !== undefined) {
+            setBalance(snap.data().balance);
+          }
+        }, (err) => {
+          console.error("App.tsx balance snapshot error:", err);
+        });
+        
+        setLoading(false);
       } else {
+        if (!isMounted) return;
         setUser(null);
         setIsAdmin(false);
+        setBalance(0);
+        setLoading(false);
+        if (unsubBalance) {
+          unsubBalance();
+          unsubBalance = null;
+        }
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      unsubscribe();
+      if (unsubBalance) unsubBalance();
+    };
   }, []);
 
   if (loading) {
@@ -68,10 +110,18 @@ export default function App() {
             <Route path="/store" element={<Store user={user} />} />
             <Route path="/product/:id" element={<Store user={user} />} />
             <Route path="/admin" element={isAdmin ? <Admin /> : <Navigate to="/" />} />
+            <Route path="/wallet" element={<WalletPage user={user} />} />
             <Route path="/success" element={<Success user={user} />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>
+        
+        <CartDrawer 
+          isOpen={isCartOpen}
+          onClose={() => setIsCartOpen(false)}
+          user={user}
+          balance={balance}
+        />
       </div>
     </Router>
   );

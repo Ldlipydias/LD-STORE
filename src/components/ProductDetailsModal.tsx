@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ShoppingBag, Plus, CheckCircle2, Zap, MessageSquare, Package, ShieldCheck, Share2, Loader2, Tag } from 'lucide-react';
+import { X, ShoppingBag, ShoppingCart, Plus, CheckCircle2, Zap, MessageSquare, Package, ShieldCheck, Share2, Loader2, Tag } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 
@@ -35,13 +35,6 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, o
   if (!product) return null;
 
   const allImages = [product.imageUrl, ...(product.sampleImages || [])];
-
-  const handleShare = () => {
-    const url = `https://story.app.br/product/${product.id}`;
-    const text = `Olha esse produto: *${product.name}*\n\nGaranta já o seu! 🔥\n${url}`;
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(whatsappUrl, '_blank');
-  };
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) return;
@@ -100,6 +93,34 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, o
   };
 
   const currentPrice = activeCoupon ? Math.max(0, product.price * (1 - activeCoupon.discount / 100)) : product.price;
+
+  const handleShare = async () => {
+    const url = `https://story.app.br/product/${product.id}`;
+    
+    let text = `Olha esse produto: *${product.name}*\n`;
+    if (activeCoupon) {
+      text += `Use o cupom *${activeCoupon.code}* e pague apenas *R$ ${currentPrice.toFixed(2)}*! (Valor original: R$ ${product.price.toFixed(2)})\n`;
+    } else {
+      text += `Por apenas *R$ ${product.price.toFixed(2)}*\n`;
+    }
+    
+    text += `\n📸 Veja a imagem:\n${product.imageUrl}\n\nGaranta já o seu! 🔥\n${url}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Compre ${product.name}`,
+          text: text,
+        });
+        return;
+      } catch (err) {
+        console.log("Ação de compartilhar cancelada ou não suportada", err);
+      }
+    }
+
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(whatsappUrl, '_blank');
+  };
 
   const handleBuyInternal = () => {
     onBuy({ 
@@ -282,20 +303,52 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, o
               {/* Action Buttons */}
               <div className="space-y-4">
                 <button 
-                  onClick={handleBuyInternal}
-                  className="w-full py-5 rounded-[1.5rem] bg-gradient-to-r from-purple-600 to-purple-400 text-white font-black text-sm flex items-center justify-center gap-3 shadow-xl shadow-purple-600/20 hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest"
+                  onClick={() => {
+                    const cartStr = localStorage.getItem('ld_cart');
+                    const cart = cartStr ? JSON.parse(cartStr) : [];
+                    cart.push({
+                      ...product,
+                      cartPrice: currentPrice,
+                      appliedCoupon: activeCoupon?.code || null,
+                      originalPrice: activeCoupon ? product.price : null
+                    });
+                    localStorage.setItem('ld_cart', JSON.stringify(cart));
+                    window.dispatchEvent(new Event('cart_updated'));
+                    alert('Adicionado ao carrinho com sucesso!');
+                    onClose();
+                  }}
+                  className="w-full py-5 rounded-[1.5rem] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-black text-sm flex items-center justify-center gap-3 hover:bg-emerald-500 hover:text-black transition-all uppercase tracking-widest"
                 >
-                  <ShoppingBag className="w-5 h-5" />
-                  Pague com Cartão
+                  <ShoppingCart className="w-5 h-5" />
+                  ADICIONAR AO CARRINHO
                 </button>
-                
-                <button 
-                  onClick={handlePixInternal}
-                  className="w-full py-5 rounded-[1.5rem] bg-white/5 border border-white/10 text-white font-black text-sm flex items-center justify-center gap-3 hover:bg-white/10 transition-all uppercase tracking-widest"
-                >
-                  <svg fill="#24b394" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" className="w-5 h-5"><g id="SVGRepo_bgCarrier" strokeWidth="0"></g><g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g><g id="SVGRepo_iconCarrier"><path d="M11.917 11.71a2.046 2.046 0 0 1-1.454-.602l-2.1-2.1a.4.4 0 0 0-.551 0l-2.108 2.108a2.044 2.044 0 0 1-1.454.602h-.414l2.66 2.66c.83.83 2.177.83 3.007 0l2.667-2.668h-.253zM4.25 4.282c.55 0 1.066.214 1.454.602l2.108 2.108a.39.39 0 0 0 .552 0l2.1-2.1a2.044 2.044 0 0 1 1.453-.602h.253L9.503 1.623a2.127 2.127 0 0 0-3.007 0l-2.66 2.66h.414z"></path><path d="m14.377 6.496-1.612-1.612a.307.307 0 0 1-.114.023h-.733c-.379 0-.75.154-1.017.422l-2.1 2.1a1.005 1.005 0 0 1-1.425 0L5.268 5.32a1.448 1.448 0 0 0-1.018-.422h-.9a.306.306 0 0 1-.109-.021L1.623 6.496c-.83.83-.83 2.177 0 3.008l1.618 1.618a.305.305 0 0 1 .108-.022h.901c.38 0 .75-.153 1.018-.421L7.375 8.57a1.034 1.034 0 0 1 1.426 0l2.1 2.1c.267.268.638.421 1.017.421h.733c.04 0 .079.01.114.024l1.612-1.612c.83-.83.83-2.178 0-3.008z"></path></g></svg>
-                  Pagar com Pix
-                </button>
+
+                <div className="flex gap-4">
+                  <button 
+                    onClick={handleBuyInternal}
+                    className="flex-1 py-5 rounded-[1.5rem] bg-gradient-to-r from-purple-600 to-purple-400 text-white font-black text-sm flex items-center justify-center gap-3 shadow-xl shadow-purple-600/20 hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest"
+                  >
+                    <ShoppingBag className="w-5 h-5" />
+                    Cartão
+                  </button>
+                  
+                  <button 
+                    onClick={handlePixInternal}
+                    className="flex-1 py-5 rounded-[1.5rem] bg-white/5 border border-white/10 text-white font-black text-sm flex items-center justify-center gap-3 hover:bg-white/10 transition-all uppercase tracking-widest"
+                  >
+                    <svg fill="#24b394" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 shrink-0"><g id="SVGRepo_bgCarrier" strokeWidth="0"></g><g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g><g id="SVGRepo_iconCarrier"><path d="M11.917 11.71a2.046 2.046 0 0 1-1.454-.602l-2.1-2.1a.4.4 0 0 0-.551 0l-2.108 2.108a2.044 2.044 0 0 1-1.454.602h-.414l2.66 2.66c.83.83 2.177.83 3.007 0l2.667-2.668h-.253zM4.25 4.282c.55 0 1.066.214 1.454.602l2.108 2.108a.39.39 0 0 0 .552 0l2.1-2.1a2.044 2.044 0 0 1 1.453-.602h.253L9.503 1.623a2.127 2.127 0 0 0-3.007 0l-2.66 2.66h.414z"></path><path d="m14.377 6.496-1.612-1.612a.307.307 0 0 1-.114.023h-.733c-.379 0-.75.154-1.017.422l-2.1 2.1a1.005 1.005 0 0 1-1.425 0L5.268 5.32a1.448 1.448 0 0 0-1.018-.422h-.9a.306.306 0 0 1-.109-.021L1.623 6.496c-.83.83-.83 2.177 0 3.008l1.618 1.618a.305.305 0 0 1 .108-.022h.901c.38 0 .75-.153 1.018-.421L7.375 8.57a1.034 1.034 0 0 1 1.426 0l2.1 2.1c.267.268.638.421 1.017.421h.733c.04 0 .079.01.114.024l1.612-1.612c.83-.83.83-2.178 0-3.008z"></path></g></svg>
+                    Pix
+                  </button>
+                </div>
+
+                <div className="pt-2">
+                  <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/30">
+                    <p className="text-xs text-orange-400 font-bold leading-relaxed text-center">
+                      <span className="block mb-1">Atenção sobre Reembolsos:</span>
+                      O valor do reembolso será creditado exclusivamente como SALDO NA CARTEIRA desta plataforma, para uso em novas compras, e não retornará ao método original do pagamento.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {/* Description Section */}

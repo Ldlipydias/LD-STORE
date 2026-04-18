@@ -4,7 +4,7 @@ import { collection, getDocs, query, where, orderBy, onSnapshot, limit } from 'f
 import { User } from 'firebase/auth';
 import { useParams } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
-import { ShoppingCart, Download, ExternalLink, Sparkles, Filter, Loader2, Copy, Check, QrCode, Clock, MessageSquare } from 'lucide-react';
+import { ShoppingCart, Download, ExternalLink, Sparkles, Filter, Loader2, Copy, Check, QrCode, Clock, MessageSquare, Crown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import PixPaymentModal from '../components/PixPaymentModal';
 import SupportModal from '../components/SupportModal';
@@ -38,6 +38,8 @@ export default function Store({ user }: StoreProps) {
   const [selectedProductDetails, setSelectedProductDetails] = useState<any | null>(null);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [unreadSupportMessages, setUnreadSupportMessages] = useState(0);
+  const [topBuyers, setTopBuyers] = useState<any[]>([]);
+  const [balance, setBalance] = useState(0);
 
   // Load pending PIX product from localStorage on mount
   useEffect(() => {
@@ -49,6 +51,24 @@ export default function Store({ user }: StoreProps) {
         console.error('Error parsing saved pix product:', e);
         localStorage.removeItem('pending_pix_product');
       }
+    }
+    
+    // Listen for Top Buyers (Wall of Fame)
+    let unsubscribeWallOfFame: (() => void) | null = null;
+    let isMounted = true;
+    
+    import('firebase/firestore').then(({ doc, onSnapshot }) => {
+      if (!isMounted) return;
+      unsubscribeWallOfFame = onSnapshot(doc(db, 'settings', 'wallOfFame'), (docSnap) => {
+        if (docSnap.exists() && docSnap.data().list) {
+          setTopBuyers(docSnap.data().list);
+        }
+      }, (err) => console.error("Top buyers error:", err));
+    });
+
+    return () => {
+      isMounted = false;
+      if (unsubscribeWallOfFame) unsubscribeWallOfFame();
     }
   }, []);
 
@@ -70,7 +90,7 @@ export default function Store({ user }: StoreProps) {
         } else {
           setUnreadSupportMessages(0);
         }
-      });
+      }, (err) => console.error("Store support messages snapshot error:", err));
 
       return () => unsubscribe();
     }
@@ -216,6 +236,21 @@ export default function Store({ user }: StoreProps) {
 
   return (
     <div className="space-y-16 pb-32">
+      {/* Floating Action Buttons */}
+      <div className="fixed bottom-6 right-6 flex flex-col gap-4 z-40">
+        <button
+          onClick={handleSupport}
+          className="relative p-4 rounded-full bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-500/20 hover:scale-110 active:scale-95 transition-all group"
+        >
+          {unreadSupportMessages > 0 && (
+            <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-black border-2 border-black animate-pulse">
+              {unreadSupportMessages}
+            </div>
+          )}
+          <MessageSquare className="w-6 h-6 group-hover:-translate-y-1 transition-transform" />
+        </button>
+      </div>
+
       <AnimatePresence>
         {error && (
           <motion.div
@@ -232,6 +267,38 @@ export default function Store({ user }: StoreProps) {
       </AnimatePresence>
 
       <BannerCarousel />
+
+      {topBuyers.length > 0 && (
+        <div className="space-y-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 rounded-xl bg-gradient-to-tr from-purple-500 to-purple-700">
+              <Sparkles className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black uppercase tracking-tight text-white/90">Destaques do Mês</h2>
+              <p className="text-[10px] text-purple-400 font-bold uppercase tracking-widest">Os maiores compradores da plataforma</p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {topBuyers.map((buyer, idx) => (
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: idx * 0.1 }}
+                className="bg-black/40 border border-purple-500/20 rounded-2xl p-4 flex flex-col items-center justify-center text-center gap-2 group hover:border-purple-500/50 hover:bg-purple-500/10 transition-colors shadow-lg shadow-purple-500/5"
+              >
+                <div className="flex items-center gap-2 w-full justify-center px-1">
+                  <Crown className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                  <p className="font-bold text-white text-sm truncate flex-1" title={buyer.name}>{buyer.name}</p>
+                </div>
+                {buyer.username && <p className="text-[10px] text-purple-300/70 font-bold uppercase tracking-widest truncate w-full">{buyer.username}</p>}
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex justify-end border-b border-white/5 pb-6">
         <div className="flex items-center gap-4 bg-white/[0.03] p-2 rounded-2xl border border-white/5">
@@ -406,19 +473,6 @@ export default function Store({ user }: StoreProps) {
           }}
         />
       )}
-
-      {/* Floating Support Button */}
-      <button
-        onClick={handleSupport}
-        className="fixed bottom-6 right-6 z-40 p-4 rounded-full bg-purple-600 text-white shadow-xl shadow-purple-500/30 hover:bg-purple-500 hover:scale-105 transition-all flex items-center justify-center group"
-      >
-        <MessageSquare className="w-6 h-6" />
-        {unreadSupportMessages > 0 && (
-          <span className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-[10px] font-black border-2 border-black animate-pulse">
-            {unreadSupportMessages}
-          </span>
-        )}
-      </button>
 
       {user && (
         <SupportModal

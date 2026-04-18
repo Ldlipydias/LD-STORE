@@ -27,9 +27,24 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
 
   // Form for new ticket
   const [orderId, setOrderId] = useState('');
+  const [ticketType, setTicketType] = useState('support');
+  const [userOrders, setUserOrders] = useState<any[]>([]);
 
   useEffect(() => {
     if (!isOpen) return;
+
+    // Fetch user orders for refund selection
+    const fetchOrders = async () => {
+      try {
+        const qOrders = query(collection(db, 'orders'), where('userId', '==', userId), where('status', '==', 'paid'));
+        const snap = await getDocs(qOrders);
+        const orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setUserOrders(orders);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchOrders();
 
     // Listen to user's most recent ticket
     const q = query(
@@ -57,7 +72,7 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
         setShowCreateForm(true);
       }
       setLoading(false);
-    });
+    }, (err) => console.error("Support user ticket snap:", err));
 
     // Listen to global settings
     const settingsUnsubscribe = onSnapshot(doc(db, 'settings', 'support'), (docSnap) => {
@@ -69,7 +84,7 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
         setQueueCount(110);
         setSupportEmail('kakaxe188@gmail.com');
       }
-    });
+    }, (err) => console.error("Support settings snap:", err));
 
     return () => {
       unsubscribe();
@@ -99,6 +114,7 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
         userId,
         userEmail,
         orderId,
+        type: ticketType,
         status: 'open',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -256,16 +272,63 @@ export default function SupportModal({ isOpen, onClose, userId, userEmail }: Sup
                 <form onSubmit={handleCreateTicket} className="space-y-4">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">
-                      ID do Pedido ou Comprovante
+                      Tipo de Atendimento
                     </label>
-                    <input
-                      type="text"
-                      value={orderId}
-                      onChange={(e) => setOrderId(e.target.value)}
-                      placeholder="Ex: #12345 ou PIX"
-                      className="w-full px-4 py-3 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none text-sm"
-                    />
+                    <select
+                      value={ticketType}
+                      onChange={(e) => setTicketType(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none text-sm cursor-pointer"
+                    >
+                      <option value="support">Dúvida ou Problema Técnico</option>
+                      <option value="refund">Solicitação de Reembolso</option>
+                    </select>
                   </div>
+
+                  {ticketType === 'support' ? (
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                        ID do Pedido ou Comprovante
+                      </label>
+                      <input
+                        type="text"
+                        value={orderId}
+                        onChange={(e) => setOrderId(e.target.value)}
+                        placeholder="Ex: #12345 ou PIX"
+                        className="w-full px-4 py-3 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none text-sm"
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                        Selecione o Pedido (Garantia de 7 dias)
+                      </label>
+                      <select
+                        value={orderId}
+                        onChange={(e) => setOrderId(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none text-sm cursor-pointer"
+                      >
+                        <option value="">Selecione...</option>
+                        {userOrders.filter(o => {
+                          const orderDate = new Date(o.createdAt);
+                          const limitDate = new Date();
+                          limitDate.setDate(limitDate.getDate() - 7);
+                          return orderDate >= limitDate;
+                        }).map(order => (
+                          <option key={order.id} value={order.id}>
+                            {order.productName || 'Produto'} - R$ {(order.price || order.amount || 0).toFixed(2)} - {new Date(order.createdAt).toLocaleDateString()}
+                          </option>
+                        ))}
+                      </select>
+                      {userOrders.filter(o => {
+                        const orderDate = new Date(o.createdAt);
+                        const limitDate = new Date();
+                        limitDate.setDate(limitDate.getDate() - 7);
+                        return orderDate >= limitDate;
+                      }).length === 0 && (
+                        <p className="text-xs text-red-400 mt-2 font-bold">Você não possui pedidos elegíveis para reembolso dentro do prazo de 7 dias.</p>
+                      )}
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">
