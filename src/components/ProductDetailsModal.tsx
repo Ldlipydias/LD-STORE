@@ -97,53 +97,34 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, o
   const handleShare = async () => {
     const url = `https://story.app.br/product/${product.id}`;
     
-    let baseText = `Olha esse produto: *${product.name}*\n`;
+    let text = `🚨 *OFERTA IMPERDÍVEL* 🚨\n\n`;
+    text += `📦 Produto: *${product.name}*\n\n`;
+    
     if (activeCoupon) {
-      baseText += `Use o cupom *${activeCoupon.code}* e pague apenas *R$ ${currentPrice.toFixed(2)}*! (Valor original: R$ ${product.price.toFixed(2)})\n`;
+      text += `✨ Use o cupom *${activeCoupon.code}* e pague apenas:\n`;
+      text += `💰 *R$ ${currentPrice.toFixed(2)}* 😱\n`;
+      text += `*(De R$ ${product.price.toFixed(2)})*\n\n`;
     } else {
-      baseText += `Por apenas *R$ ${product.price.toFixed(2)}*\n`;
+      text += `💰 Por apenas *R$ ${product.price.toFixed(2)}* 😱\n\n`;
     }
     
-    baseText += `\nGaranta já o seu! 🔥\n${url}`;
-
-    // Tentar criar um arquivo de imagem com AllOrigins proxy para evitar bloqueios de CORS do navegador.
-    let sharedFiles: File[] = [];
-    try {
-      const response = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(product.imageUrl)}`);
-      const blob = await response.blob();
-      // Assume JPG ou puxa da url original. Extensões com interrogação são tratadas.
-      const rawExt = product.imageUrl.split('.').pop()?.split('?')[0] || 'jpg';
-      const fileExt = ['png', 'jpg', 'jpeg', 'webp'].includes(rawExt.toLowerCase()) ? rawExt.toLowerCase() : 'jpg';
-      const file = new File([blob], `produto.${fileExt}`, { type: blob.type || `image/${fileExt}` });
-      sharedFiles = [file];
-    } catch (err) {
-      console.warn("Nao foi possivel converter a imagem para envio direto", err);
-    }
+    text += `🏃‍♂️🏃‍♀️ Corre que o estoque voa!\n`;
+    text += `👇 Garanta já o seu no link abaixo:\n`;
+    text += `🔗 ${url}\n`;
 
     if (navigator.share) {
       try {
-        const shareData: any = {
-          title: `Compre ${product.name}`,
-          text: baseText,
-        };
-
-        if (sharedFiles.length > 0 && navigator.canShare && navigator.canShare({ files: sharedFiles })) {
-          shareData.files = sharedFiles;
-        } else {
-          // Se o dispositivo não suporta enviar arquivo nativamente, anexa a imagem no texto final.
-          shareData.text = baseText + `\n\n📸 Veja a imagem:\n${product.imageUrl}`;
-        }
-
-        await navigator.share(shareData);
+        await navigator.share({
+          title: `OFERTA: ${product.name}`,
+          text: text,
+        });
         return;
       } catch (err) {
         console.log("Ação de compartilhar nativa fechada/cancelada", err);
       }
     }
 
-    // Fallback pra Desktop / Sem suporte (WhatsApp Web não suporta anexar imagens via params de URL `wa.me`, apenas Texto).
-    const fallbackText = baseText + `\n\n📸 Veja a imagem:\n${product.imageUrl}`;
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(fallbackText)}`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(whatsappUrl, '_blank');
   };
 
