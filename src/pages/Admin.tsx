@@ -338,10 +338,24 @@ export default function Admin() {
     setProducts(prods.docs.map(d => ({ id: d.id, ...d.data() })));
 
     const usersSnap = await getDocs(query(collection(db, 'users'), orderBy('createdAt', 'desc')));
-    setUsers(usersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    let usersList = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
 
     const ordersSnap = await getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc')));
-    setAllOrders(ordersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const ordersList = ordersSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+    
+    // Recovery missing emails from their orders
+    usersList = usersList.map(u => {
+      if (!u.email) {
+        const theirOrder = ordersList.find(o => o.userId === u.id && o.userEmail);
+        if (theirOrder) {
+          u.email = theirOrder.userEmail;
+        }
+      }
+      return u;
+    });
+
+    setUsers(usersList);
+    setAllOrders(ordersList);
     
     try {
       const couponsSnap = await getDocs(query(collection(db, 'coupons')));
@@ -810,6 +824,18 @@ export default function Admin() {
     }
   };
 
+  const getUserEmail = (item: any) => {
+    if (item.userEmail) return item.userEmail;
+    if (item.userId) {
+      const u = users.find(u => u.id === item.userId);
+      if (u) {
+        if (u.email) return u.email;
+        if (u.displayName) return u.displayName;
+      }
+    }
+    return '(Anônimo / Sem Registro)';
+  };
+
   const handleDeliverProduct = async (product: any) => {
     if (!selectedTicket) return;
     if (!product) return;
@@ -890,8 +916,8 @@ export default function Admin() {
     e.preventDefault();
     if (!messageModal || !messageModal.body.trim()) return;
     setSendingMessage(true);
-    if (!messageModal.user?.email || messageModal.user.email.includes('(Usuário sem e-mail')) {
-      alert('Aviso: Este cliente fez login e comprou, mas a conta do Google dele não forneceu um e-mail público (provavelmente foi criada com número de telefone). Por isso, não é possível enviar uma mensagem para ele.');
+    if (!messageModal.user?.email || messageModal.user.email.includes('(Usuário sem') || messageModal.user.email.includes('(Anônimo')) {
+      alert('Aviso: Este cliente fez login, mas a conta dele não forneceu um e-mail público. Por isso, não é possível enviar uma mensagem para ele diretamente.');
       setSendingMessage(false);
       return;
     }
@@ -1338,7 +1364,7 @@ export default function Admin() {
 
                   <div className="space-y-1">
                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Cliente</p>
-                    <p className="text-sm text-gray-300 font-medium break-all">{order.userEmail || '(Usuário sem e-mail)'}</p>
+                    <p className="text-sm text-gray-300 font-medium break-all">{getUserEmail(order)}</p>
                   </div>
 
                   <div className="space-y-2">
@@ -1451,7 +1477,7 @@ export default function Admin() {
                           </span>
                         )}
                       </div>
-                    <p className="font-bold text-sm line-clamp-1">{ticket.userEmail || '(Usuário sem e-mail)'}</p>
+                    <p className="font-bold text-sm line-clamp-1">{getUserEmail(ticket)}</p>
                     <p className="text-xs text-gray-500 mt-1 line-clamp-1">Pedido: {ticket.orderId}</p>
                     <p className="text-xs text-gray-400 mt-2 line-clamp-2">
                       {ticket.messages[ticket.messages.length - 1]?.text}
@@ -1468,7 +1494,7 @@ export default function Admin() {
                   {/* Chat Header */}
                   <div className="p-4 border-b border-white/10 bg-black/20 flex items-center justify-between">
                     <div>
-                      <p className="font-bold">{selectedTicket.userEmail || '(Usuário sem e-mail)'}</p>
+                      <p className="font-bold">{getUserEmail(selectedTicket)}</p>
                       <p className="text-xs text-gray-500">Pedido: {selectedTicket.orderId}</p>
                     </div>
                       <div className="flex items-center gap-2">
@@ -2136,7 +2162,7 @@ export default function Admin() {
                         <Users className="w-6 h-6 text-purple-400" />
                       </div>
                       <div>
-                        <p className="font-black text-lg leading-tight">{user.email || '(Usuário sem e-mail público)'}</p>
+                        <p className="font-black text-lg leading-tight">{user.email || user.displayName || '(Usuário Oculto / Sem Registro)'}</p>
                         <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">
                           Desde: {new Date(user.createdAt).toLocaleDateString()} • ID: {user.id.substring(0, 8)}
                         </p>
@@ -2159,23 +2185,25 @@ export default function Admin() {
                         >
                           {selectedUser?.id === user.id ? 'FECHAR HISTÓRICO' : 'VER HISTÓRICO'}
                         </button>
-                        {user.email && !user.email.includes('(Usuário sem') && (
-                          <a
-                            href={`mailto:${user.email}`}
-                            className="px-4 py-2 rounded-xl bg-white/10 text-white text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all flex items-center gap-2 border border-white/20"
-                            title="Abrir no seu serviço de e-mail (Gmail, Outlook, etc)"
-                          >
-                            <Mail className="w-3 h-3" />
-                            GMAIL/EMAIL
-                          </a>
+                        {user.email && !user.email.includes('(Usuário sem') && !user.email.includes('(Anônimo') && (
+                          <>
+                            <a
+                              href={`mailto:${user.email}`}
+                              className="px-4 py-2 rounded-xl bg-white/10 text-white text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all flex items-center gap-2 border border-white/20"
+                              title="Abrir no seu serviço de e-mail (Gmail, Outlook, etc)"
+                            >
+                              <Mail className="w-3 h-3" />
+                              GMAIL/EMAIL
+                            </a>
+                            <button
+                              onClick={() => setMessageModal({ show: true, user, subject: '', body: '' })}
+                              className="px-4 py-2 rounded-xl bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-purple-500 transition-all flex items-center gap-2"
+                            >
+                              <Mail className="w-3 h-3" />
+                              MENSAGEM AQUI
+                            </button>
+                          </>
                         )}
-                        <button
-                          onClick={() => setMessageModal({ show: true, user, subject: '', body: '' })}
-                          className="px-4 py-2 rounded-xl bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-purple-500 transition-all flex items-center gap-2"
-                        >
-                          <Mail className="w-3 h-3" />
-                          MENSAGEM AQUI
-                        </button>
                       </div>
                     </div>
 

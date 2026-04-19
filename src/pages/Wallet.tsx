@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot, collection, addDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, addDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Wallet, CreditCard, ArrowUpCircle, History, Sparkles, Clock, Target, Gift, Building2, ShoppingBag } from 'lucide-react';
+import { Wallet, CreditCard, ArrowUpCircle, History, Sparkles, Clock, Target, Gift, Building2, ShoppingBag, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { loadStripe } from '@stripe/stripe-js';
 import PixPaymentModal from '../components/PixPaymentModal';
@@ -25,8 +25,14 @@ export default function WalletPage({ user }: WalletPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
 
-  // Pix Modal state
   const [isPixOpen, setIsPixOpen] = useState(false);
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [savingEmail, setSavingEmail] = useState(false);
+
+  // Fetch true email from users doc
+  const [currentEmail, setCurrentEmail] = useState(user?.email || '');
+
   const fakeWalletProduct = { id: 'wallet_topup', name: 'Depósito na LD Bank Stor', price: parseFloat(amountToAdd) || 0 };
 
   useEffect(() => {
@@ -40,6 +46,8 @@ export default function WalletPage({ user }: WalletPageProps) {
         setBonusBalance(data.bonusBalance || 0);
         setLoyaltyPoints(data.loyaltyPoints || 0);
         setLoyaltySpent(data.loyaltySpent || 0);
+        if (data.email) setCurrentEmail(data.email);
+        else setCurrentEmail(user.email || '');
       }
     }, (err) => console.error("Wallet balance error:", err));
 
@@ -62,6 +70,26 @@ export default function WalletPage({ user }: WalletPageProps) {
 
     return () => unsub();
   }, [user]);
+
+  const handleUpdateEmail = async () => {
+    if (!newEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+      alert("Por favor, informe um e-mail válido.");
+      return;
+    }
+    setSavingEmail(true);
+    try {
+      await updateDoc(doc(db, 'users', user!.uid), {
+        email: newEmail,
+        updatedAt: new Date().toISOString()
+      });
+      alert('Seu e-mail foi salvo com sucesso! O administrador agora poderá entrar em contato com você.');
+      setEditingEmail(false);
+    } catch (e: any) {
+      alert('Erro ao salvar e-mail: ' + e.message);
+    } finally {
+      setSavingEmail(false);
+    }
+  };
 
   if (!user) {
     return (
@@ -208,6 +236,68 @@ export default function WalletPage({ user }: WalletPageProps) {
                 />
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Profile / Email Settings */}
+        <div className="p-6 rounded-3xl bg-white/5 border border-white/10 relative overflow-hidden">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold uppercase flex items-center gap-2">
+              <Users className="w-5 h-5 text-blue-500" />
+              Perfil
+            </h2>
+            {!currentEmail && (
+              <span className="text-[10px] font-black uppercase tracking-widest bg-red-500/20 text-red-400 px-2 py-1 rounded">
+                E-mail Ausente
+              </span>
+            )}
+          </div>
+          
+          <div className="space-y-4">
+            <p className="text-sm text-gray-400">
+              Caso seu e-mail não esteja visível para a loja, o administrador não conseguirá entrar em contato com você via chat nem solucionar problemas fora da plataforma.
+            </p>
+            
+            {!editingEmail ? (
+              <div className="flex items-center justify-between p-4 bg-black/40 rounded-2xl border border-white/5">
+                <div>
+                  <p className="text-[10px] uppercase font-bold tracking-widest text-gray-500 mb-1">E-mail de Contato</p>
+                  <p className="font-bold text-white mb-1">{currentEmail || 'Nenhum e-mail registrado'}</p>
+                  <p className="text-xs text-gray-400">{user?.displayName || 'Sem nome'}</p>
+                </div>
+                <button 
+                  onClick={() => { setEditingEmail(true); setNewEmail(currentEmail); }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all"
+                >
+                  {currentEmail ? 'ALTERAR' : 'ADICIONAR'}
+                </button>
+              </div>
+            ) : (
+              <div className="p-4 bg-black/40 rounded-2xl border border-blue-500/30 space-y-4">
+                <input
+                  type="email"
+                  placeholder="Seu melhor e-mail..."
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500/50 transition-colors"
+                />
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={handleUpdateEmail}
+                    disabled={savingEmail}
+                    className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white text-sm font-black uppercase tracking-widest rounded-xl transition-all disabled:opacity-50"
+                  >
+                    {savingEmail ? 'SALVANDO...' : 'SALVAR E-MAIL'}
+                  </button>
+                  <button 
+                    onClick={() => setEditingEmail(false)}
+                    className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white text-sm font-black uppercase tracking-widest rounded-xl transition-all"
+                  >
+                    CANCELAR
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

@@ -50,12 +50,37 @@ export default function App() {
         
         if (!isMounted) return;
 
+        const extractEmail = (u: any) => {
+          if (u.email) return u.email;
+          if (u.providerData && u.providerData.length > 0) {
+            for (const p of u.providerData) {
+              if (p.email) return p.email;
+            }
+          }
+          return null;
+        };
+        
+        const currentEmail = extractEmail(user);
+
         if (!userSnap.exists()) {
           await setDoc(userRef, {
-            email: user.email,
-            role: user.email?.toLowerCase().trim() === 'kakaxe188@gmail.com' ? 'admin' : 'user',
+            email: currentEmail,
+            displayName: user.displayName || null,
+            photoURL: user.photoURL || null,
+            role: currentEmail?.toLowerCase().trim() === 'kakaxe188@gmail.com' ? 'admin' : 'user',
             createdAt: new Date().toISOString()
           });
+        } else {
+          // Fallback to update profile fields if missing
+          const data = userSnap.data();
+          const updates: any = {};
+          if (!data.email && currentEmail) updates.email = currentEmail;
+          if (!data.displayName && user.displayName) updates.displayName = user.displayName;
+          if (!data.photoURL && user.photoURL) updates.photoURL = user.photoURL;
+          
+          if (Object.keys(updates).length > 0) {
+            await setDoc(userRef, updates, { merge: true });
+          }
         }
         
         if (!isMounted) return;
