@@ -165,8 +165,14 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, o
             </button>
 
             {/* Product Image & Gallery */}
-            <div className="space-y-4 p-4">
-              <div className="aspect-video w-full overflow-hidden bg-black/40 rounded-2xl">
+            <div className="space-y-4 p-4 relative">
+              {/* Promo Badge */}
+              {product.originalPrice && product.originalPrice > product.price && (
+                <div className="absolute top-8 left-8 z-10 px-4 py-1.5 rounded-full bg-red-500 text-white text-[10px] font-black uppercase tracking-widest shadow-2xl backdrop-blur-md flex items-center gap-1">
+                   <span className="text-white text-xs">🔥</span> PROMOÇÃO
+                </div>
+              )}
+              <div className="aspect-video w-full overflow-hidden bg-black/40 rounded-2xl relative">
                 <img 
                   src={currentImage || product.imageUrl} 
                   alt={product.name}

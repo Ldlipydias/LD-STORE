@@ -11,9 +11,10 @@ interface CartDrawerProps {
   onClose: () => void;
   user: User | null;
   balance: number;
+  bonusBalance?: number;
 }
 
-export default function CartDrawer({ isOpen, onClose, user, balance }: CartDrawerProps) {
+export default function CartDrawer({ isOpen, onClose, user, balance, bonusBalance = 0 }: CartDrawerProps) {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -46,8 +47,10 @@ export default function CartDrawer({ isOpen, onClose, user, balance }: CartDrawe
       return;
     }
 
-    if (balance < total) {
-      alert(`Saldo insuficiente. Você tem R$ ${balance.toFixed(2)} e o carrinho custa R$ ${total.toFixed(2)}. Adicione mais fundos.`);
+    const totalFunds = balance + bonusBalance;
+
+    if (totalFunds < total) {
+      alert(`Saldo insuficiente. Você tem R$ ${totalFunds.toFixed(2)} disponíveis no total e o carrinho custa R$ ${total.toFixed(2)}. Adicione mais fundos.`);
       onClose();
       navigate('/wallet');
       return;
@@ -56,9 +59,41 @@ export default function CartDrawer({ isOpen, onClose, user, balance }: CartDrawe
     setLoading(true);
     try {
       const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+      const userData = userSnap.data() || {};
       
-      // Deduct balance
-      await setDoc(userRef, { balance: balance - total }, { merge: true });
+      // Deduct balance logic (Use bonus first)
+      let remainTotal = total;
+      let newBonus = bonusBalance;
+      let newBalance = balance;
+
+      if (newBonus >= remainTotal) {
+        newBonus -= remainTotal;
+        remainTotal = 0;
+      } else {
+        remainTotal -= newBonus;
+        newBonus = 0;
+        newBalance -= remainTotal;
+      }
+
+      // Record loyalty points
+      let pts = (userData.loyaltyPoints || 0) + items.length;
+      let spent = (userData.loyaltySpent || 0) + total;
+      
+      if (pts >= 10 || spent >= 30) {
+        newBonus += 5; // Reward
+        pts -= 10;
+        if (pts < 0) pts = 0;
+        spent -= 30;
+        if (spent < 0) spent = 0;
+      }
+
+      await setDoc(userRef, { 
+        balance: newBalance, 
+        bonusBalance: newBonus,
+        loyaltyPoints: pts,
+        loyaltySpent: spent
+      }, { merge: true });
 
       // Create orders
       for (const item of items) {

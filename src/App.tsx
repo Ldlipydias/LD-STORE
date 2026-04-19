@@ -23,6 +23,7 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState(0);
+  const [bonusBalance, setBonusBalance] = useState(0);
   const [isCartOpen, setIsCartOpen] = useState(false);
 
   useEffect(() => {
@@ -64,8 +65,10 @@ export default function App() {
 
         // Listen for balance updates
         unsubBalance = onSnapshot(userRef, (snap) => {
-          if (snap.exists() && snap.data().balance !== undefined) {
-            setBalance(snap.data().balance);
+          if (snap.exists()) {
+            const d = snap.data();
+            if (d.balance !== undefined) setBalance(d.balance);
+            if (d.bonusBalance !== undefined) setBonusBalance(d.bonusBalance);
           }
         }, (err) => {
           console.error("App.tsx balance snapshot error:", err);
@@ -77,6 +80,7 @@ export default function App() {
         setUser(null);
         setIsAdmin(false);
         setBalance(0);
+        setBonusBalance(0);
         setLoading(false);
         if (unsubBalance) {
           unsubBalance();
@@ -121,6 +125,7 @@ export default function App() {
           onClose={() => setIsCartOpen(false)}
           user={user}
           balance={balance}
+          bonusBalance={bonusBalance}
         />
       </div>
     </Router>

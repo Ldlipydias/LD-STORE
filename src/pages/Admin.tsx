@@ -626,7 +626,34 @@ export default function Admin() {
           throw new Error("Conta de usuário destino não encontrada no bando de dados.");
         }
       } else if (order.productId) {
-        // 2. Decrease stock for digital products
+        // Compute Loyalty points when product is paid directly via Pix (no topup)
+        if (order.userId) {
+          const userRef = doc(db, 'users', order.userId);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            let pts = (userData.loyaltyPoints || 0) + 1;
+            const itemPrice = parseFloat(order.price || order.amount || '0');
+            let spent = (userData.loyaltySpent || 0) + (isNaN(itemPrice) ? 0 : itemPrice);
+            let newBonus = userData.bonusBalance || 0;
+            
+            if (pts >= 10 || spent >= 30) {
+              newBonus += 5;
+              pts -= 10;
+              if (pts < 0) pts = 0;
+              spent -= 30;
+              if (spent < 0) spent = 0;
+            }
+            
+            await updateDoc(userRef, { 
+              loyaltyPoints: pts, 
+              loyaltySpent: spent, 
+              bonusBalance: newBonus 
+            });
+          }
+        }
+        
+        // Decrease stock for digital products
         const productDoc = await getDoc(doc(db, 'products', order.productId));
         if (productDoc.exists()) {
           const currentStock = productDoc.data().stock || 0;

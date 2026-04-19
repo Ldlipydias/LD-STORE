@@ -332,6 +332,12 @@ export default function Store({ user }: StoreProps) {
                 />
                 
                 <div className="absolute top-6 right-6 flex flex-col gap-2 z-20">
+                  {prod.originalPrice && prod.originalPrice > prod.price && (
+                    <div className="px-4 py-1.5 rounded-full bg-red-500 text-white text-[10px] font-black uppercase tracking-widest shadow-2xl backdrop-blur-md flex items-center gap-1">
+                       <span className="text-white text-xs">🔥</span> PROMOÇÃO
+                    </div>
+                  )}
+
                   {isPurchased && (
                     <div className="px-4 py-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest shadow-2xl backdrop-blur-md">
                       ADQUIRIDO

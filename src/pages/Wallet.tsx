@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection, addDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Wallet, CreditCard, ArrowUpCircle, History, Sparkles, Clock } from 'lucide-react';
+import { Wallet, CreditCard, ArrowUpCircle, History, Sparkles, Clock, Target, Gift, Building2, ShoppingBag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { loadStripe } from '@stripe/stripe-js';
 import PixPaymentModal from '../components/PixPaymentModal';
@@ -16,6 +16,10 @@ interface WalletPageProps {
 
 export default function WalletPage({ user }: WalletPageProps) {
   const [balance, setBalance] = useState(0);
+  const [bonusBalance, setBonusBalance] = useState(0);
+  const [loyaltyPoints, setLoyaltyPoints] = useState(0);
+  const [loyaltySpent, setLoyaltySpent] = useState(0);
+
   const [amountToAdd, setAmountToAdd] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,15 +27,19 @@ export default function WalletPage({ user }: WalletPageProps) {
 
   // Pix Modal state
   const [isPixOpen, setIsPixOpen] = useState(false);
-  const fakeWalletProduct = { id: 'wallet_topup', name: 'Adição de Saldo na Carteira', price: parseFloat(amountToAdd) || 0 };
+  const fakeWalletProduct = { id: 'wallet_topup', name: 'Depósito na LD Bank Stor', price: parseFloat(amountToAdd) || 0 };
 
   useEffect(() => {
     if (!user) return;
     
     // Balance listener
     const unsub = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
-      if (docSnap.exists() && docSnap.data().balance !== undefined) {
-        setBalance(docSnap.data().balance || 0);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setBalance(data.balance || 0);
+        setBonusBalance(data.bonusBalance || 0);
+        setLoyaltyPoints(data.loyaltyPoints || 0);
+        setLoyaltySpent(data.loyaltySpent || 0);
       }
     }, (err) => console.error("Wallet balance error:", err));
 
@@ -45,8 +53,7 @@ export default function WalletPage({ user }: WalletPageProps) {
         );
         const snap = await getDocs(q);
         const allOrders = snap.docs.map(d => ({id: d.id, ...d.data()}) as any);
-        const topups = allOrders.filter((o: any) => o.isWalletTopup || o.productId === 'wallet_topup');
-        setTransactions(topups);
+        setTransactions(allOrders); // Now we show ALL orders / extracts
       } catch (e) {
         console.error("Error fetching transactions:", e);
       }
@@ -122,20 +129,86 @@ export default function WalletPage({ user }: WalletPageProps) {
   return (
     <div className="max-w-2xl mx-auto space-y-8 pb-32">
       <div className="flex items-center gap-3">
-        <div className="p-3 rounded-xl bg-emerald-500/20">
-          <Wallet className="w-8 h-8 text-emerald-500" />
+        <div className="p-3 rounded-xl bg-purple-500/20">
+          <Building2 className="w-8 h-8 text-purple-500" />
         </div>
         <div>
-          <h1 className="text-3xl font-black uppercase tracking-tight">Minha Carteira</h1>
-          <p className="text-gray-400 text-sm">Adicione saldo e use para compras rápidas</p>
+          <h1 className="text-3xl font-black uppercase tracking-tight">LD Bank Stor</h1>
+          <p className="text-gray-400 text-sm">Sua conta digital na LD Store</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6">
-        <div className="p-8 rounded-3xl bg-gradient-to-br from-emerald-900/40 to-black border border-emerald-500/20 relative overflow-hidden">
-          <Sparkles className="absolute top-4 right-4 w-24 h-24 text-emerald-500/10" />
-          <p className="text-xs font-bold text-emerald-500 uppercase tracking-widest mb-2">Saldo Atual</p>
-          <p className="text-5xl font-black text-white drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]">R$ {balance.toFixed(2)}</p>
+        {/* Virtual Card */}
+        <div className="p-8 rounded-3xl bg-gradient-to-br from-purple-900/60 via-[#1C0F2E] to-black border border-purple-500/30 relative overflow-hidden shadow-2xl shadow-purple-900/20">
+          <Sparkles className="absolute top-0 right-0 w-32 h-32 text-purple-500/10 -translate-y-1/2 translate-x-1/2" />
+          <div className="absolute top-4 right-8 flex gap-1">
+            <div className="w-8 h-8 rounded-full bg-white/20" />
+            <div className="w-8 h-8 rounded-full bg-white/20 -ml-4" />
+          </div>
+          
+          <p className="text-xs font-bold text-purple-400 uppercase tracking-widest mb-1">Saldo Principal</p>
+          <p className="text-5xl font-black text-white drop-shadow-[0_0_15px_rgba(168,85,247,0.4)]">R$ {balance.toFixed(2)}</p>
+          
+          <div className="mt-8 flex justify-between items-end">
+            <div>
+              <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1">Titular da Conta</p>
+              <p className="text-sm font-bold text-white uppercase tracking-wider">{user?.email?.split('@')[0] || 'Usuário'}</p>
+            </div>
+            {bonusBalance > 0 && (
+              <div className="text-right">
+                <p className="text-[10px] text-pink-400 uppercase tracking-widest mb-1 font-bold">Saldo Bônus</p>
+                <p className="text-lg font-black text-pink-400 drop-shadow-[0_0_10px_rgba(244,114,182,0.3)]">+ R$ {bonusBalance.toFixed(2)}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Loyalty Tracker */}
+        <div className="p-6 rounded-3xl bg-white/5 border border-white/10 relative overflow-hidden">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-bold uppercase flex items-center gap-2">
+              <Gift className="w-5 h-5 text-pink-500" />
+              Programa de Recompensas
+            </h2>
+            <div className="text-xs font-bold px-2 py-1 bg-pink-500/20 text-pink-400 rounded-lg uppercase tracking-widest">
+              Ganhe R$ 5,00
+            </div>
+          </div>
+          
+          <p className="text-sm text-gray-400 mb-6">Complete 10 compras ou gaste até R$ 30,00 para ganhar R$ 5,00 em saldo bônus para gastar na loja!</p>
+          
+          <div className="space-y-5">
+            <div>
+              <div className="flex justify-between text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                <span>Compras realizadas</span>
+                <span className="text-white">{loyaltyPoints} / 10</span>
+              </div>
+              <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden">
+                <motion.div 
+                  className="bg-gradient-to-r from-pink-500 to-purple-500 h-3 rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(100, (loyaltyPoints / 10) * 100)}%` }}
+                  transition={{ duration: 1, delay: 0.2 }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex justify-between text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                <span>Valor Gasto</span>
+                <span className="text-white">R$ {loyaltySpent.toFixed(2)} / R$ 30,00</span>
+              </div>
+              <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden">
+                <motion.div 
+                  className="bg-gradient-to-r from-emerald-400 to-emerald-600 h-3 rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(100, (loyaltySpent / 30) * 100)}%` }}
+                  transition={{ duration: 1, delay: 0.4 }}
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         <AnimatePresence>
@@ -207,23 +280,35 @@ export default function WalletPage({ user }: WalletPageProps) {
           <div className="p-6 rounded-3xl bg-white/5 border border-white/10 space-y-4">
             <h2 className="text-lg font-bold uppercase flex items-center gap-2 mb-6">
               <History className="w-5 h-5 text-gray-400" />
-              Histórico de Adições
+              Extrato de Transações
             </h2>
-            <div className="space-y-3 max-h-[400px] overflow-auto pr-2 custom-scrollbar">
-              {transactions.map(t => (
-                <div key={t.id} className="p-4 bg-black/40 rounded-2xl border border-white/5 flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-sm">Adição de Saldo</p>
-                    <p className="text-xs text-gray-500">{new Date(t.createdAt).toLocaleDateString()} • {t.paymentMethod}</p>
+            <div className="space-y-3 max-h-[500px] overflow-auto pr-2 custom-scrollbar">
+              {transactions.map(t => {
+                const isAddition = t.isWalletTopup || t.productId === 'wallet_topup';
+                const statusColor = t.status === 'paid' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-amber-500/20 text-amber-500';
+                
+                return (
+                  <div key={t.id} className="p-4 bg-black/40 rounded-2xl border border-white/5 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-full hidden sm:block ${isAddition ? 'bg-emerald-500/20 text-emerald-500' : 'bg-blue-500/20 text-blue-500'}`}>
+                        {isAddition ? <ArrowUpCircle className="w-4 h-4" /> : <ShoppingBag className="w-4 h-4" />}
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm tracking-tight">{isAddition ? 'Depósito na Conta' : `Compra: ${t.productName}`}</p>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">{new Date(t.createdAt).toLocaleDateString()} • {t.paymentMethod}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`font-black text-sm ${isAddition ? 'text-emerald-400' : 'text-gray-200'}`}>
+                        {isAddition ? '+' : '-'} R$ {parseFloat(t.amount || t.price || 0).toFixed(2)}
+                      </p>
+                      <span className={`text-[8px] font-bold uppercase px-2 py-0.5 rounded ${statusColor}`}>
+                        {t.status === 'paid' ? 'Aprovado' : 'Pendente'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-black text-emerald-400 text-sm">R$ {parseFloat(t.amount || t.price || 0).toFixed(2)}</p>
-                    <span className={`text-[8px] font-bold uppercase px-2 py-0.5 rounded ${t.status === 'paid' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-amber-500/20 text-amber-500'}`}>
-                      {t.status === 'paid' ? 'Aprovado' : 'Pendente'}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

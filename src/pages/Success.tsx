@@ -96,6 +96,30 @@ export default function Success({ user }: SuccessProps) {
                 const currentBalance = userSnap.data().balance || 0;
                 await setDoc(userRef, { balance: currentBalance + finalPrice }, { merge: true });
               }
+            } else {
+              // Not topup: Compute Loyalty Points
+              const userRef = doc(db, 'users', user.uid);
+              const userSnap = await getDoc(userRef);
+              if (userSnap.exists()) {
+                const userData = userSnap.data();
+                let pts = (userData.loyaltyPoints || 0) + 1;
+                let spent = (userData.loyaltySpent || 0) + finalPrice;
+                let newBonus = userData.bonusBalance || 0;
+                
+                if (pts >= 10 || spent >= 30) {
+                  newBonus += 5;
+                  pts -= 10;
+                  if (pts < 0) pts = 0;
+                  spent -= 30;
+                  if (spent < 0) spent = 0;
+                }
+                
+                await setDoc(userRef, { 
+                  loyaltyPoints: pts, 
+                  loyaltySpent: spent, 
+                  bonusBalance: newBonus 
+                }, { merge: true });
+              }
             }
 
             // Notificar administrador
