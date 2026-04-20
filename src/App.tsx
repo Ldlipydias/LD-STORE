@@ -45,61 +45,64 @@ export default function App() {
         }
         
         // Sync user to Firestore
-        const userRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userRef);
-        
-        if (!isMounted) return;
+        try {
+          const userRef = doc(db, 'users', user.uid);
+          const userSnap = await getDoc(userRef);
+          
+          if (!isMounted) return;
 
-        const extractEmail = (u: any) => {
-          if (u.email) return u.email;
-          if (u.providerData && u.providerData.length > 0) {
-            for (const p of u.providerData) {
-              if (p.email) return p.email;
+          const extractEmail = (u: any) => {
+            if (u.email) return u.email;
+            if (u.providerData && u.providerData.length > 0) {
+              for (const p of u.providerData) {
+                if (p.email) return p.email;
+              }
+            }
+            return null;
+          };
+          
+          const currentEmail = extractEmail(user);
+
+          if (!userSnap.exists()) {
+            await setDoc(userRef, {
+              email: currentEmail,
+              displayName: user.displayName || null,
+              photoURL: user.photoURL || null,
+              role: currentEmail?.toLowerCase().trim() === 'kakaxe188@gmail.com' ? 'admin' : 'user',
+              createdAt: new Date().toISOString()
+            });
+          } else {
+            const data = userSnap.data();
+            const updates: any = {};
+            if (!data.email && currentEmail) updates.email = currentEmail;
+            if (!data.displayName && user.displayName) updates.displayName = user.displayName;
+            if (!data.photoURL && user.photoURL) updates.photoURL = user.photoURL;
+            
+            if (Object.keys(updates).length > 0) {
+              await setDoc(userRef, updates, { merge: true });
             }
           }
-          return null;
-        };
-        
-        const currentEmail = extractEmail(user);
-
-        if (!userSnap.exists()) {
-          await setDoc(userRef, {
-            email: currentEmail,
-            displayName: user.displayName || null,
-            photoURL: user.photoURL || null,
-            role: currentEmail?.toLowerCase().trim() === 'kakaxe188@gmail.com' ? 'admin' : 'user',
-            createdAt: new Date().toISOString()
-          });
-        } else {
-          // Fallback to update profile fields if missing
-          const data = userSnap.data();
-          const updates: any = {};
-          if (!data.email && currentEmail) updates.email = currentEmail;
-          if (!data.displayName && user.displayName) updates.displayName = user.displayName;
-          if (!data.photoURL && user.photoURL) updates.photoURL = user.photoURL;
           
-          if (Object.keys(updates).length > 0) {
-            await setDoc(userRef, updates, { merge: true });
-          }
+          if (!isMounted) return;
+
+          // Clean up previous listener if it exists
+          if (unsubBalance) unsubBalance();
+
+          // Listen for balance updates
+          unsubBalance = onSnapshot(userRef, (snap) => {
+            if (snap.exists()) {
+              const d = snap.data();
+              if (d.balance !== undefined) setBalance(d.balance);
+              if (d.bonusBalance !== undefined) setBonusBalance(d.bonusBalance);
+            }
+          }, (err) => {
+            console.error("App.tsx balance snapshot error:", err);
+          });
+        } catch (error) {
+           console.error("Erro crítico na sincronização de usuário:", error);
+        } finally {
+           if (isMounted) setLoading(false);
         }
-        
-        if (!isMounted) return;
-
-        // Clean up previous listener if it exists
-        if (unsubBalance) unsubBalance();
-
-        // Listen for balance updates
-        unsubBalance = onSnapshot(userRef, (snap) => {
-          if (snap.exists()) {
-            const d = snap.data();
-            if (d.balance !== undefined) setBalance(d.balance);
-            if (d.bonusBalance !== undefined) setBonusBalance(d.bonusBalance);
-          }
-        }, (err) => {
-          console.error("App.tsx balance snapshot error:", err);
-        });
-        
-        setLoading(false);
       } else {
         if (!isMounted) return;
         setUser(null);
