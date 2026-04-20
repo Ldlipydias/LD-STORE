@@ -363,6 +363,23 @@ export default function WalletPage({ user }: WalletPageProps) {
                 PIX
               </button>
             </div>
+            
+            <button
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  // This will force re-fetching of all orders for this user by the backend 
+                  // or just refresh the UI to see if a late webhook or sync happened
+                  window.location.reload(); 
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="w-full mt-4 py-2 rounded-xl text-[10px] font-bold text-gray-500 hover:text-white uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+            >
+              <Clock className="w-3 h-3" />
+              Verificar pagamentos pendentes
+            </button>
           </div>
         </div>
 
