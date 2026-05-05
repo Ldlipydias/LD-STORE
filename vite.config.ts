@@ -4,47 +4,45 @@ import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+import { cloudflare } from "@cloudflare/vite-plugin";
+
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   
   return {
-    plugins: [
-      react(), 
-      tailwindcss(),
-      VitePWA({
-        strategies: 'injectManifest',
-        srcDir: 'src',
-        filename: 'sw.ts',
-        registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
-        manifest: {
-          name: 'LD STORE',
-          short_name: 'LD Store',
-          description: 'Premium App Store with Admin Dashboard',
-          theme_color: '#050505',
-          background_color: '#050505',
-          display: 'standalone',
-          icons: [
-            {
-              src: 'https://i.ibb.co/rKSwsh4q/Chat-GPT-Image-26-de-mar-de-2026-23-36-08.png',
-              sizes: '192x192',
-              type: 'image/png'
-            },
-            {
-              src: 'https://i.ibb.co/rKSwsh4q/Chat-GPT-Image-26-de-mar-de-2026-23-36-08.png',
-              sizes: '512x512',
-              type: 'image/png'
-            },
-            {
-              src: 'https://i.ibb.co/rKSwsh4q/Chat-GPT-Image-26-de-mar-de-2026-23-36-08.png',
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'any maskable'
-            }
-          ]
-        }
-      })
-    ],
+    plugins: [react(), tailwindcss(), VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+      manifest: {
+        name: 'LD STORE',
+        short_name: 'LD Store',
+        description: 'Premium App Store with Admin Dashboard',
+        theme_color: '#050505',
+        background_color: '#050505',
+        display: 'standalone',
+        icons: [
+          {
+            src: 'https://i.ibb.co/rKSwsh4q/Chat-GPT-Image-26-de-mar-de-2026-23-36-08.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: 'https://i.ibb.co/rKSwsh4q/Chat-GPT-Image-26-de-mar-de-2026-23-36-08.png',
+            sizes: '512x512',
+            type: 'image/png'
+          },
+          {
+            src: 'https://i.ibb.co/rKSwsh4q/Chat-GPT-Image-26-de-mar-de-2026-23-36-08.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable'
+          }
+        ]
+      }
+    }), cloudflare()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || ''),
       'import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY': JSON.stringify(process.env.VITE_STRIPE_PUBLISHABLE_KEY || env.VITE_STRIPE_PUBLISHABLE_KEY || ''),
