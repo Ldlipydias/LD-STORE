@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { User } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db, logout, loginWithGoogle } from '../firebase';
-import { LogOut, Store, LayoutDashboard, BadgeCheck, Download, LogIn, Wallet, ShoppingCart } from 'lucide-react';
+import { LogOut, Store, LayoutDashboard, BadgeCheck, Download, LogIn, Wallet, ShoppingCart, MessageSquare } from 'lucide-react';
 import metadata from '../../metadata.json';
 
 interface NavbarProps {
@@ -124,6 +124,13 @@ export default function Navbar({ user, isAdmin }: NavbarProps) {
           {user ? (
             <>
               <div className="flex items-center gap-4 md:gap-6">
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('open_support'))}
+                  className="flex items-center justify-center p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 hover:bg-purple-500/20 transition-all group"
+                  title="Suporte"
+                >
+                  <MessageSquare className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                </button>
                 <button
                   onClick={() => window.dispatchEvent(new CustomEvent('open_cart'))}
                   className="relative flex items-center gap-2 px-3 py-2 rounded-xl bg-black/60 border border-white/10 hover:bg-black transition-all group"

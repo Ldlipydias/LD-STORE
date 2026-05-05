@@ -249,20 +249,20 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, o
                   <Tag className="w-4 h-4" />
                   Cupom de Desconto
                 </div>
-                <div className="flex gap-2">
+                <div className="flex bg-white/5 border border-white/10 rounded-xl overflow-hidden focus-within:border-purple-500 transition-colors">
                   <input
                     type="text"
                     value={couponCode}
                     onChange={(e) => setCouponCode(e.target.value)}
                     placeholder="DIGITE AQUI"
                     disabled={!!activeCoupon || couponLoading}
-                    className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-purple-500 text-sm font-bold uppercase"
+                    className="flex-1 px-4 py-2 bg-transparent outline-none text-sm font-bold uppercase min-w-0"
                   />
                   {!activeCoupon ? (
                     <button
                       onClick={handleApplyCoupon}
                       disabled={couponLoading || !couponCode.trim()}
-                      className="px-4 py-2 bg-purple-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-purple-500 disabled:opacity-50 flex items-center justify-center min-w-[80px]"
+                      className="px-4 py-2 bg-purple-600 text-white font-black text-xs uppercase tracking-widest hover:bg-purple-500 disabled:opacity-50 flex items-center justify-center min-w-[80px]"
                     >
                       {couponLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'APLICAR'}
                     </button>
@@ -272,7 +272,7 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, o
                         setActiveCoupon(null);
                         setCouponCode('');
                       }}
-                      className="px-4 py-2 bg-red-500/20 text-red-500 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-red-500 hover:text-white"
+                      className="px-4 py-2 bg-red-500/20 text-red-500 font-black text-xs uppercase tracking-widest hover:bg-red-500 hover:text-white"
                     >
                       REMOVER
                     </button>
@@ -314,49 +314,83 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, o
 
               {/* Action Buttons */}
               <div className="space-y-4">
-                <button 
-                  onClick={() => {
-                    const cartStr = localStorage.getItem('ld_cart');
-                    const cart = cartStr ? JSON.parse(cartStr) : [];
-                    cart.push({
-                      ...product,
-                      cartPrice: currentPrice,
-                      appliedCoupon: activeCoupon?.code || null,
-                      originalPrice: activeCoupon ? product.price : null
-                    });
-                    localStorage.setItem('ld_cart', JSON.stringify(cart));
-                    window.dispatchEvent(new Event('cart_updated'));
-                    alert('Adicionado ao carrinho com sucesso!');
-                    onClose();
-                  }}
-                  className="w-full py-5 rounded-[1.5rem] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-black text-sm flex items-center justify-center gap-3 hover:bg-emerald-500 hover:text-black transition-all uppercase tracking-widest"
-                >
-                  <ShoppingCart className="w-5 h-5" />
-                  ADICIONAR AO CARRINHO
-                </button>
+                <div className="space-y-4">
+                  {(!product.kiwifyUrl || activeCoupon) ? (
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={handleBuyInternal}
+                        className="flex-1 py-4 rounded-[1.5rem] bg-gradient-to-r from-purple-600 to-purple-400 text-white font-black text-xs flex items-center justify-center gap-2 shadow-xl shadow-purple-600/20 hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest"
+                      >
+                        <ShoppingBag className="w-4 h-4" />
+                        Cartão
+                      </button>
+                      
+                      <button 
+                        onClick={handlePixInternal}
+                        className="flex-1 py-4 rounded-[1.5rem] bg-white/5 border border-white/10 text-white font-black text-xs flex items-center justify-center gap-2 hover:bg-white/10 transition-all uppercase tracking-widest"
+                      >
+                        <svg fill="#a855f7" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 shrink-0"><g id="SVGRepo_bgCarrier" strokeWidth="0"></g><g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g><g id="SVGRepo_iconCarrier"><path d="M11.917 11.71a2.046 2.046 0 0 1-1.454-.602l-2.1-2.1a.4.4 0 0 0-.551 0l-2.108 2.108a2.044 2.044 0 0 1-1.454.602h-.414l2.66 2.66c.83.83 2.177.83 3.007 0l2.667-2.668h-.253zM4.25 4.282c.55 0 1.066.214 1.454.602l2.108 2.108a.39.39 0 0 0 .552 0l2.1-2.1a2.044 2.044 0 0 1 1.453-.602h.253L9.503 1.623a2.127 2.127 0 0 0-3.007 0l-2.66 2.66h.414z"></path><path d="m14.377 6.496-1.612-1.612a.307.307 0 0 1-.114.023h-.733c-.379 0-.75.154-1.017.422l-2.1 2.1a1.005 1.005 0 0 1-1.425 0L5.268 5.32a1.448 1.448 0 0 0-1.018-.422h-.9a.306.306 0 0 1-.109-.021L1.623 6.496c-.83.83-.83 2.177 0 3.008l1.618 1.618a.305.305 0 0 1 .108-.022h.901c.38 0 .75-.153 1.018-.421L7.375 8.57a1.034 1.034 0 0 1 1.426 0l2.1 2.1c.267.268.638.421 1.017.421h.733c.04 0 .079.01.114.024l1.612-1.612c.83-.83.83-2.178 0-3.008z"></path></g></svg>
+                        Pix
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      {/* Destaque de parcelamento discreto e elegante */}
+                      <div className="flex bg-purple-500/10 border border-purple-500/20 rounded-[1.5rem] p-4 items-center gap-4">
+                        <div className="flex flex-col items-center justify-center bg-purple-500/20 text-purple-400 w-12 h-12 rounded-xl font-black text-xl">
+                          {product.installmentCount || 12}x
+                        </div>
+                        <div className="flex flex-col justify-center flex-1">
+                          <span className="text-purple-400 text-[10px] font-bold uppercase tracking-widest mb-1">Pagamento Facilitado</span>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-white text-sm font-bold">R$</span>
+                            <span className="text-white text-3xl font-black tracking-tighter">
+                              {product.installmentValue ? product.installmentValue.toFixed(2) : (currentPrice * 0.10342).toFixed(2)}
+                            </span>
+                            <span className="text-white/50 text-xs font-bold ml-1">/mês no cartão</span>
+                          </div>
+                        </div>
+                      </div>
 
-                <div className="flex gap-4">
+                      <button 
+                        onClick={handleBuyInternal}
+                        className="w-full py-5 rounded-[1.5rem] bg-gradient-to-r from-purple-600 to-purple-400 text-white font-black flex flex-col items-center justify-center gap-1 shadow-[0_0_30px_rgba(147,51,234,0.3)] hover:scale-[1.02] active:scale-95 transition-all tracking-widest relative overflow-hidden group uppercase"
+                      >
+                        <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                        <div className="flex items-center gap-3 relative z-10 text-sm">
+                          <ShoppingBag className="w-5 h-5" />
+                          COMPRAR VIA PIX OU CARTÃO
+                        </div>
+                      </button>
+                    </div>
+                  )}
+
                   <button 
-                    onClick={handleBuyInternal}
-                    className="flex-1 py-5 rounded-[1.5rem] bg-gradient-to-r from-purple-600 to-purple-400 text-white font-black text-sm flex items-center justify-center gap-3 shadow-xl shadow-purple-600/20 hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest"
+                    onClick={() => {
+                      const cartStr = localStorage.getItem('ld_cart');
+                      const cart = cartStr ? JSON.parse(cartStr) : [];
+                      cart.push({
+                        ...product,
+                        cartPrice: currentPrice,
+                        appliedCoupon: activeCoupon?.code || null,
+                        originalPrice: activeCoupon ? product.price : null
+                      });
+                      localStorage.setItem('ld_cart', JSON.stringify(cart));
+                      window.dispatchEvent(new Event('cart_updated'));
+                      alert('Adicionado ao carrinho com sucesso!');
+                      onClose();
+                    }}
+                    className="w-full py-4 rounded-[1.5rem] bg-white/5 border border-white/10 text-white font-black text-xs flex items-center justify-center gap-2 hover:bg-white/10 transition-all uppercase tracking-widest"
                   >
-                    <ShoppingBag className="w-5 h-5" />
-                    Cartão
-                  </button>
-                  
-                  <button 
-                    onClick={handlePixInternal}
-                    className="flex-1 py-5 rounded-[1.5rem] bg-white/5 border border-white/10 text-white font-black text-sm flex items-center justify-center gap-3 hover:bg-white/10 transition-all uppercase tracking-widest"
-                  >
-                    <svg fill="#24b394" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 shrink-0"><g id="SVGRepo_bgCarrier" strokeWidth="0"></g><g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g><g id="SVGRepo_iconCarrier"><path d="M11.917 11.71a2.046 2.046 0 0 1-1.454-.602l-2.1-2.1a.4.4 0 0 0-.551 0l-2.108 2.108a2.044 2.044 0 0 1-1.454.602h-.414l2.66 2.66c.83.83 2.177.83 3.007 0l2.667-2.668h-.253zM4.25 4.282c.55 0 1.066.214 1.454.602l2.108 2.108a.39.39 0 0 0 .552 0l2.1-2.1a2.044 2.044 0 0 1 1.453-.602h.253L9.503 1.623a2.127 2.127 0 0 0-3.007 0l-2.66 2.66h.414z"></path><path d="m14.377 6.496-1.612-1.612a.307.307 0 0 1-.114.023h-.733c-.379 0-.75.154-1.017.422l-2.1 2.1a1.005 1.005 0 0 1-1.425 0L5.268 5.32a1.448 1.448 0 0 0-1.018-.422h-.9a.306.306 0 0 1-.109-.021L1.623 6.496c-.83.83-.83 2.177 0 3.008l1.618 1.618a.305.305 0 0 1 .108-.022h.901c.38 0 .75-.153 1.018-.421L7.375 8.57a1.034 1.034 0 0 1 1.426 0l2.1 2.1c.267.268.638.421 1.017.421h.733c.04 0 .079.01.114.024l1.612-1.612c.83-.83.83-2.178 0-3.008z"></path></g></svg>
-                    Pix
+                    <ShoppingCart className="w-4 h-4" />
+                    ADICIONAR AO CARRINHO
                   </button>
                 </div>
 
                 <div className="pt-2">
-                  <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/30">
-                    <p className="text-xs text-orange-400 font-bold leading-relaxed text-center">
-                      <span className="block mb-1">Atenção sobre Reembolsos:</span>
+                  <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/20">
+                    <p className="text-[10px] text-orange-400/80 font-bold leading-relaxed text-center">
+                      <span className="block mb-1 text-orange-400">Atenção sobre Reembolsos:</span>
                       O valor do reembolso será creditado exclusivamente como SALDO NA CARTEIRA desta plataforma, para uso em novas compras, e não retornará ao método original do pagamento.
                     </p>
                   </div>
@@ -377,22 +411,21 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onBuy, o
                     <p className="text-sm font-medium text-gray-300 leading-relaxed whitespace-pre-wrap">
                       {product.description}
                     </p>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="flex items-start gap-3">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                        <p className="text-sm font-bold text-gray-300 leading-relaxed uppercase">ENTREGA IMEDIATA</p>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                        <p className="text-sm font-bold text-gray-300 leading-relaxed uppercase">SUPORTE 24/7</p>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                        <p className="text-sm font-bold text-gray-300 leading-relaxed uppercase">QUALIDADE PREMIUM</p>
-                      </div>
+                  ) : null}
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
+                      <p className="text-sm font-bold text-gray-300 leading-relaxed uppercase">ENTREGA IMEDIATA</p>
                     </div>
-                  )}
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
+                      <p className="text-sm font-bold text-gray-300 leading-relaxed uppercase">SUPORTE 24/7</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
+                      <p className="text-sm font-bold text-gray-300 leading-relaxed uppercase">QUALIDADE PREMIUM</p>
+                    </div>
+                  </div>
                 </div>
               </div>
 

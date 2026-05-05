@@ -270,12 +270,13 @@ app.post('/api/create-checkout-session', async (req, res) => {
 
 app.get('/api/verify-session/:sessionId', async (req, res) => {
   try {
-    const stripe = getStripe();
     const { sessionId } = req.params;
+
+    const stripe = getStripe();
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     res.json({ status: session.payment_status, amount_total: session.amount_total });
   } catch (error: any) {
-    console.error('Stripe Verification Error:', error);
+    console.error('Session Verification Error:', error);
     res.status(500).json({ error: error.message });
   }
 });

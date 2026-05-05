@@ -133,7 +133,10 @@ export default function WalletPage({ user }: WalletPageProps) {
       }
 
       if (data.url) {
-        window.location.href = data.url;
+        const win = window.open(data.url, '_blank');
+        if (!win) {
+           window.location.href = data.url;
+        }
       }
     } catch (err: any) {
       console.error(err);

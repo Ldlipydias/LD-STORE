@@ -191,6 +191,9 @@ export default function Admin() {
     price: '',
     downloadUrl: '',
     stock: '10',
+    kiwifyUrl: '',
+    installmentCount: '12',
+    installmentValue: '',
     image: null as File | null,
     currentImageUrl: '',
     sampleImages: [] as (File | string)[]
@@ -503,6 +506,9 @@ export default function Admin() {
           price: parseFloat(productForm.price),
           stock: parseInt(productForm.stock) || 0,
           downloadUrl: productForm.downloadUrl,
+          kiwifyUrl: productForm.kiwifyUrl,
+          installmentCount: parseInt(productForm.installmentCount) || 12,
+          installmentValue: productForm.installmentValue ? parseFloat(productForm.installmentValue) : null,
           sampleImages: sampleImageUrls
         };
         if (imageUrl) updateData.imageUrl = imageUrl;
@@ -521,12 +527,15 @@ export default function Admin() {
           price: parseFloat(productForm.price),
           stock: parseInt(productForm.stock) || 0,
           downloadUrl: productForm.downloadUrl,
+          kiwifyUrl: productForm.kiwifyUrl,
+          installmentCount: parseInt(productForm.installmentCount) || 12,
+          installmentValue: productForm.installmentValue ? parseFloat(productForm.installmentValue) : null,
           imageUrl,
           sampleImages: sampleImageUrls,
           createdAt: new Date().toISOString()
         });
       }
-      setProductForm({ name: '', description: '', price: '', downloadUrl: '', stock: '10', image: null, currentImageUrl: '', sampleImages: [] });
+      setProductForm({ name: '', description: '', price: '', downloadUrl: '', stock: '10', kiwifyUrl: '', installmentCount: '12', installmentValue: '', image: null, currentImageUrl: '', sampleImages: [] });
       fetchData();
     } catch (error: any) {
       console.error(error);
@@ -544,6 +553,9 @@ export default function Admin() {
       price: prod.price.toString(),
       downloadUrl: prod.downloadUrl || '',
       stock: (prod.stock || 0).toString(),
+      kiwifyUrl: prod.kiwifyUrl || '',
+      installmentCount: prod.installmentCount?.toString() || '12',
+      installmentValue: prod.installmentValue?.toString() || '',
       image: null,
       currentImageUrl: prod.imageUrl || '',
       sampleImages: prod.sampleImages || []
@@ -1585,7 +1597,7 @@ export default function Admin() {
 
                   {/* Messages */}
                   <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-                    {selectedTicket.messages.map((msg: any) => (
+                    {selectedTicket.messages?.map((msg: any) => (
                       <div
                         key={msg.id}
                         className={`flex flex-col ${msg.sender === 'admin' ? 'items-end' : 'items-start'}`}
@@ -1808,7 +1820,7 @@ export default function Admin() {
               <button
                 onClick={() => {
                   setEditingId(null);
-                  setProductForm({ name: '', description: '', price: '', downloadUrl: '', stock: '10', image: null });
+                  setProductForm({ name: '', description: '', price: '', downloadUrl: '', stock: '10', kiwifyUrl: '', installmentCount: '12', installmentValue: '', image: null, currentImageUrl: '', sampleImages: [] });
                 }}
                 className="flex items-center gap-1 text-xs font-bold text-gray-400 hover:text-white transition-colors"
               >
@@ -1848,6 +1860,25 @@ export default function Admin() {
                   className="flex-1 px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none"
                 />
               </div>
+              <div className="flex gap-4">
+                <input
+                  type="number"
+                  value={productForm.installmentCount}
+                  onChange={(e) => setProductForm({ ...productForm, installmentCount: e.target.value })}
+                  placeholder="Qtd Parcelas (ex: 12)"
+                  className="flex-1 px-4 py-2 rounded-xl bg-black/60 border border-purple-500/30 focus:border-purple-500 outline-none text-purple-100 placeholder:text-purple-400/50"
+                  min="1"
+                  max="24"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  value={productForm.installmentValue}
+                  onChange={(e) => setProductForm({ ...productForm, installmentValue: e.target.value })}
+                  placeholder="Valor mensal (Opcional)"
+                  className="flex-1 px-4 py-2 rounded-xl bg-black/60 border border-purple-500/30 focus:border-purple-500 outline-none text-purple-100 placeholder:text-purple-400/50"
+                />
+              </div>
             </div>
             <div className="space-y-4">
               <input
@@ -1856,6 +1887,13 @@ export default function Admin() {
                 onChange={(e) => setProductForm({ ...productForm, downloadUrl: e.target.value })}
                 placeholder="Link de Download ou Acesso (Mega, Drive, Link, etc.)"
                 className="w-full px-4 py-2 rounded-xl bg-black border border-white/10 focus:border-purple-500 outline-none"
+              />
+              <input
+                type="url"
+                value={productForm.kiwifyUrl}
+                onChange={(e) => setProductForm({ ...productForm, kiwifyUrl: e.target.value })}
+                placeholder="Link de Checkout Kiwify (Opcional)"
+                className="w-full px-4 py-2 rounded-xl bg-[#00E778]/10 text-[#00E778] border border-[#00E778]/20 focus:border-[#00E778] outline-none placeholder:text-[#00E778]/50"
               />
               <label className="flex flex-col items-center justify-center w-full h-32 rounded-xl border-2 border-dashed border-white/10 hover:border-purple-500/50 cursor-pointer transition-colors group overflow-hidden relative">
                 {productForm.image ? (
@@ -1885,7 +1923,7 @@ export default function Admin() {
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Imagens de Amostra (Opcional)</label>
                 <div className="grid grid-cols-4 gap-2">
-                  {productForm.sampleImages.map((img, idx) => (
+                  {productForm.sampleImages?.map((img, idx) => (
                     <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-white/10 group">
                       <img 
                         src={typeof img === 'string' ? img : URL.createObjectURL(img)} 

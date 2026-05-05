@@ -43,6 +43,9 @@ export default function Store({ user }: StoreProps) {
 
   // Load pending PIX product from localStorage on mount
   useEffect(() => {
+    const handleOpenSupport = () => setIsSupportOpen(true);
+    window.addEventListener('open_support', handleOpenSupport);
+
     const savedPixProduct = localStorage.getItem('pending_pix_product');
     if (savedPixProduct) {
       try {
@@ -68,6 +71,7 @@ export default function Store({ user }: StoreProps) {
 
     return () => {
       isMounted = false;
+      window.removeEventListener('open_support', handleOpenSupport);
       if (unsubscribeWallOfFame) unsubscribeWallOfFame();
     }
   }, []);
@@ -143,18 +147,6 @@ export default function Store({ user }: StoreProps) {
       }
     }
 
-    if (!STRIPE_PUBLISHABLE_KEY) {
-      alert('Erro: Chave pública do Stripe não configurada. \n\nSe você está no Netlify: Adicione VITE_STRIPE_PUBLISHABLE_KEY nas "Environment Variables" do painel do Netlify e faça um novo Deploy.\n\nSe você está no AI Studio: Adicione nos Secrets.');
-      return;
-    }
-
-    if (!stripePromise) {
-      alert('Erro ao inicializar Stripe. Verifique sua chave pública.');
-      return;
-    }
-
-    const stripe = await stripePromise;
-
     try {
       setError(null);
       setBuyingId(product.id);
@@ -179,17 +171,15 @@ export default function Store({ user }: StoreProps) {
       }
 
       if (data.url) {
-        // No AI Studio, abrir em nova aba é muito mais confiável no celular
         const win = window.open(data.url, '_blank');
         if (!win) {
-          // Se o bloqueador de popups impedir, tentamos o redirecionamento direto como fallback
           window.location.href = data.url;
         }
       } else {
-        throw new Error('URL de checkout não retornada pelo servidor. Verifique se a sua chave do Stripe tem permissão para "Checkout Sessions".');
+        throw new Error('URL de checkout não retornada pelo servidor.');
       }
     } catch (error: any) {
-      console.error('Stripe Error:', error);
+      console.error('Payment Error:', error);
       setError(error.message);
       alert(`Erro no Pagamento: ${error.message}`);
     } finally {
@@ -209,8 +199,8 @@ export default function Store({ user }: StoreProps) {
         return;
       }
     }
+
     setPixProduct(product);
-    localStorage.setItem('pending_pix_product', JSON.stringify(product));
   };
 
   const handleSupport = async () => {
@@ -236,21 +226,6 @@ export default function Store({ user }: StoreProps) {
 
   return (
     <div className="space-y-16 pb-32">
-      {/* Floating Action Buttons */}
-      <div className="fixed bottom-6 right-6 flex flex-col gap-4 z-40">
-        <button
-          onClick={handleSupport}
-          className="relative p-4 rounded-full bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-500/20 hover:scale-110 active:scale-95 transition-all group"
-        >
-          {unreadSupportMessages > 0 && (
-            <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-black border-2 border-black animate-pulse">
-              {unreadSupportMessages}
-            </div>
-          )}
-          <MessageSquare className="w-6 h-6 group-hover:-translate-y-1 transition-transform" />
-        </button>
-      </div>
-
       <AnimatePresence>
         {error && (
           <motion.div
@@ -479,6 +454,23 @@ export default function Store({ user }: StoreProps) {
           }}
         />
       )}
+
+      {/* Floating Action Buttons */}
+      <div className="fixed bottom-4 right-4 z-50">
+        <a
+          href="https://chat.whatsapp.com/IYmt4OdVPfHGEgVnrfmGYu?mode=gi_t"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block hover:scale-110 active:scale-95 transition-transform origin-bottom-right"
+          title="Suporte WhatsApp"
+        >
+          <img 
+              src="https://i.ibb.co/d0pLpP2z/file-00000000be7c720e82526ed2a74e7305.png" 
+              alt="Atendimento Online" 
+              className="w-40 sm:w-48 h-auto drop-shadow-2xl object-contain" 
+            />
+        </a>
+      </div>
 
       {user && (
         <SupportModal
